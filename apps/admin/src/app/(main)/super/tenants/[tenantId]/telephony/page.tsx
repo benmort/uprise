@@ -20,6 +20,7 @@ import { getSession } from '@/lib/session';
 import { TenantPageHeader } from '@/components/super/tenant-page-header';
 import { getFeatureFlags } from '@/lib/api';
 import { ProvisioningTimeline } from '@/components/telephony/provisioning-timeline';
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type RunWithSteps = TelephonyProvisioningRun & { steps: TelephonyProvisioningStep[] };
 
@@ -62,6 +63,7 @@ export default function TenantTelephonyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmRelease, setConfirmRelease] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [document, setDocument] = useState<File | null>(null);
@@ -149,7 +151,6 @@ export default function TenantTelephonyPage() {
   };
 
   const release = async (numberId: string) => {
-    if (!window.confirm('Release this number back to Twilio? Inbound texts to it will stop working.')) return;
     setActionError(null);
     const res = await telephony.releaseNumber(numberId);
     if (!res.ok) setActionError(res.error);
@@ -217,7 +218,7 @@ export default function TenantTelephonyPage() {
                         <button
                           type="button"
                           aria-label="Release number"
-                          onClick={() => release(n.id)}
+                          onClick={() => setConfirmRelease(n.id)}
                           className="ml-auto text-muted-foreground hover:text-error"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -426,6 +427,18 @@ export default function TenantTelephonyPage() {
           </CardContent>
         </Card>
       </div>
+      <ConfirmDialog
+        open={confirmRelease !== null}
+        title="Release this number?"
+        description="Release this number back to Twilio? Inbound texts to it will stop working."
+        confirmLabel="Release number"
+        onCancel={() => setConfirmRelease(null)}
+        onConfirm={() => {
+          const id = confirmRelease;
+          setConfirmRelease(null);
+          if (id) void release(id);
+        }}
+      />
     </div>
   );
 }

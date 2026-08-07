@@ -275,6 +275,26 @@ export class BasicAuthGuard implements CanActivate {
   }
 
   /**
+   * Static reference-geography tiles (`GET /geo/tiles/:layer/:z/:x/:y`).
+   *
+   * Still signed-in-only — this is not a public endpoint — but authenticated with ONE indexed
+   * lookup rather than the full principal build. A choropleth requests every tile in the viewport
+   * at once, and each of those requests was costing three sequential queries (session, user,
+   * memberships) plus a write. Twenty-odd of them against a pool of five exhausted it, and the
+   * targeting map 500'd on its own tiles.
+   *
+   * Safe to thin out because the handler takes no tenant and no user: the response is ABS/AEC
+   * boundary data, identical for every caller and already served `Cache-Control: public`. It is
+   * served by GeoTilesController precisely so it carries no `@Roles` — a light principal has no
+   * role and must never be able to satisfy one.
+   */
+  private isStaticTilePath(request: Request): boolean {
+    return this.requestPathCandidates(request).some((candidate) =>
+      /^(?:\/api\/v1)?\/geo\/tiles\//.test(candidate),
+    );
+  }
+
+  /**
    * DEV-ONLY: the on-screen OTP hint endpoint (GET /iam/dev/otp), reachable
    * pre-session in development so the SMS-code screens can show the code when no
    * real SMS is sent. Never allowlisted in production (the handler also returns null).
@@ -304,6 +324,25 @@ export class BasicAuthGuard implements CanActivate {
     }
 
     const authHeader = request.headers.authorization;
+
+    // Tiles: signed-in-only, but resolved with one query instead of the full principal build.
+    // Anything that fails here falls through to normal auth rather than short-circuiting, so a
+    // missing session still 401s exactly as it did before.
+    if (this.isStaticTilePath(request) && this.sessions) {
+      const tokens = this.getSessionTokens(request, authHeader);
+      return (async () => {
+        for (const token of tokens) {
+          const light = await this.sessions!.resolveLight(token);
+          if (!light) continue;
+          // No role and no tenant on purpose — see resolveLight. The tile handler reads neither,
+          // and a principal that could satisfy @Roles would be a hole, not a convenience.
+          request.user = { id: light.userId } as AuthUser;
+          return true;
+        }
+        throw new UnauthorizedException("Missing or invalid session");
+      })();
+    }
+
     if (this.isCronDispatchPath(request) && authHeader?.startsWith("Bearer ")) {
       const expected = this.config.get<string>("CRON_SECRET");
       const token = authHeader.slice("Bearer ".length);

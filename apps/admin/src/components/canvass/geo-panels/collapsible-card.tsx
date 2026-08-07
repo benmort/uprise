@@ -119,7 +119,7 @@ export function CollapsibleCard({
         </span>
       </button>
       {open ? (
-        <div className={cn("border-t border-[hsl(var(--muted))] px-5 py-4", bodyClassName)}>{children}</div>
+        <div className={cn("border-t border-muted px-5 py-4", bodyClassName)}>{children}</div>
       ) : null}
     </section>
   );

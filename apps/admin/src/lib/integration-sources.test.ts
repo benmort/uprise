@@ -7,6 +7,7 @@ import {
   autoSelectedSourceId,
   findSource,
   providerLabel,
+  PROVIDER_LABEL,
   pullCardTitle,
   toImportSources,
 } from "./integration-sources";
@@ -169,5 +170,17 @@ describe("nationBuilderNationOptions", () => {
       row({ id: "an1", group: "Riverside West" }),
     ]);
     expect(nationBuilderNationOptions(sources)).toEqual([{ id: "nb1", label: "riverside" }]);
+  });
+});
+
+describe("PROVIDER_LABEL", () => {
+  it("names every first-class provider (the settings UI renders these verbatim)", () => {
+    expect(PROVIDER_LABEL.ACTION_NETWORK).toBe("Action Network");
+    expect(PROVIDER_LABEL.NATION_BUILDER).toBe("NationBuilder");
+    expect(PROVIDER_LABEL.INTERNAL).toBe("Internal source");
+  });
+
+  it("providerLabel falls back to the raw type for unknown providers", () => {
+    expect(providerLabel("SOMETHING_ELSE")).toBe("SOMETHING_ELSE");
   });
 });

@@ -23,6 +23,8 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipHint } from "@/components/ui/tooltip-hint";
 import { getTwilioErrorCodeDescription } from "@/lib/twilio-error-codes";
+import { PageHeader } from "@/components/shell/page-header";
+import { KpiTile, DataTable, ListFooter } from "@uprise/ui";
 
 type TrendWindow = "all" | "15" | "60" | "240";
 
@@ -202,23 +204,22 @@ export default function BlastDetailsPage() {
 
   return (
     <div className="page-stack">
-      <Breadcrumbs items={[{ label: blastTitle || "Blast Details" }]} />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-semibold">{blastTitle}</h1>
-          <p className="text-sm text-muted-foreground">Detailed blast analytics and recipient outcomes.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <StatusBadge status={blastStatus} />
-          <StatusBadge status={streamStatus === "live" ? "ACTIVE" : "SENDING"} className="capitalize" />
-          <Button asChild variant="outline">
-            <Link href="/inbox">Blast Inbox</Link>
-          </Button>
-          <Button asChild>
-            <Link href={`/blasts/${encodeURIComponent(blastId)}/composer`}>Open Composer</Link>
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={blastTitle}
+        description="Detailed blast analytics and recipient outcomes."
+        actions={
+          <>
+            <StatusBadge status={blastStatus} />
+            <StatusBadge status={streamStatus === "live" ? "ACTIVE" : "SENDING"} className="capitalize" />
+            <Button asChild variant="outline">
+              <Link href="/inbox">Blast Inbox</Link>
+            </Button>
+            <Button asChild>
+              <Link href={`/blasts/${encodeURIComponent(blastId)}/composer`}>Open Composer</Link>
+            </Button>
+          </>
+        }
+      />
 
       {error ? (
         <EmptyState
@@ -232,22 +233,32 @@ export default function BlastDetailsPage() {
       {loading ? (
         <div className="grid gap-4 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, index) => (
-            <KpiCardSkeleton key={`blast-kpi-skeleton-${index}`} />
+            <Skeleton key={`blast-kpi-skeleton-${index}`} className="h-28 rounded-xl" />
           ))}
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-3">
-          <KpiCard
-            label="Total Contacted"
+          <KpiTile
+            size="md"
+            label={
+              <>
+                Total Contacted
+                <TooltipHint label="Recipients with sent, delivered, failed, or responded outcomes." />
+              </>
+            }
             value={String(kpis.totalContacted ?? kpis.sent ?? 0)}
-            tooltip="Recipients with sent, delivered, failed, or responded outcomes."
           />
-          <KpiCard label="Delivered" value={String(kpis.delivered || 0)} />
-          <KpiCard
-            label="Engagement Rate"
+          <KpiTile size="md" label="Delivered" value={String(kpis.delivered || 0)} />
+          <KpiTile
+            size="md"
+            label={
+              <>
+                Engagement Rate
+                <TooltipHint label="Responded recipients divided by total contacted recipients." />
+              </>
+            }
             value={`${kpis.totalContacted ? (((kpis.responded || 0) / (kpis.totalContacted || 1)) * 100).toFixed(1) : "0"}%`}
-            subtitle={`${kpis.responded || 0} replies`}
-            tooltip="Responded recipients divided by total contacted recipients."
+            caption={`${kpis.responded || 0} replies`}
           />
         </div>
       )}
@@ -337,139 +348,75 @@ export default function BlastDetailsPage() {
           </Button>
         </CardHeader>
         <CardContent className="space-y-4 overflow-x-auto">
-          <table className="w-full min-w-[960px] text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
-                <th className="py-2 pr-3">Recipient</th>
-                <th className="py-2 pr-3">Status</th>
-                <th className="py-2 pr-3">Last Action</th>
-                <th className="py-2 pr-3">Timestamp</th>
-                <th className="py-2 pr-3">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activity.map((row) => (
-                <tr key={String(row.id)} className="border-b border-border/60">
-                  <td className="py-3 pr-3">{String(row.phoneE164)}</td>
-                  <td className="py-3 pr-3">
-                    <StatusBadge status={String(row.status)} />
-                  </td>
-                  <td className="py-3 pr-3 text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      {getLastActionLabel(row)}
-                      {shouldShowReasonPopover(row) ? <TooltipHint label={getRecipientReason(row) || ""} /> : null}
-                    </span>
-                  </td>
-                  <td className="py-3 pr-3 text-muted-foreground">{formatDate(row.sentAt || row.updatedAt)}</td>
-                  <td className="py-3 pr-3">
-                    {String(row.status) === "FAILED" ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={async () => {
-                          await retryBlast(blastId);
-                          await loadForBlast(blastId, activityPage);
-                        }}
-                      >
-                        Retry
-                      </Button>
-                    ) : (
-                      <Button asChild variant="ghost" size="sm">
-                        <Link href="/inbox">
-                          View Chat
-                        </Link>
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {activity.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="py-6 text-center text-muted-foreground">
-                    No recipient activity yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-muted-foreground">
-              Showing {activity.length} of {activityTotal} recipients
-              {lastUpdatedAt ? ` • Updated ${lastUpdatedAt.toLocaleTimeString()}` : ""}
-            </p>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                Rows
-                <select
-                  className="h-9 rounded border border-input bg-background px-2 text-xs"
-                  value={activityPageSize}
-                  onChange={(event) => {
-                    setActivityPage(0);
-                    setActivityPageSize(Number(event.target.value));
-                  }}
-                >
-                  {[10, 20, 50, 100].map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <PaginationControls
-                page={activityPage}
-                pageSize={activityPageSize}
-                total={activityTotal}
-                onPrev={() => setActivityPage((prev) => Math.max(0, prev - 1))}
-                onNext={() => setActivityPage((prev) => prev + 1)}
-              />
-            </div>
-          </div>
+          <DataTable
+            aria-label="Recipient activity"
+            rows={activity}
+            rowKey={(row) => String(row.id)}
+            pageSize={0}
+            empty="No recipient activity yet."
+            columns={[
+              { key: "recipient", header: "Recipient", cell: (row) => String(row.phoneE164) },
+              { key: "status", header: "Status", cell: (row) => <StatusBadge status={String(row.status)} /> },
+              {
+                key: "last-action",
+                header: "Last Action",
+                cell: (row) => (
+                  <span className="inline-flex items-center gap-1 text-muted-foreground">
+                    {getLastActionLabel(row)}
+                    {shouldShowReasonPopover(row) ? <TooltipHint label={getRecipientReason(row) || ""} /> : null}
+                  </span>
+                ),
+              },
+              {
+                key: "timestamp",
+                header: "Timestamp",
+                cell: (row) => <span className="text-muted-foreground">{formatDate(row.sentAt || row.updatedAt)}</span>,
+              },
+              {
+                key: "action",
+                header: "Action",
+                cell: (row) =>
+                  String(row.status) === "FAILED" ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        await retryBlast(blastId);
+                        await loadForBlast(blastId, activityPage);
+                      }}
+                    >
+                      Retry
+                    </Button>
+                  ) : (
+                    <Button asChild variant="ghost" size="sm">
+                      <Link href="/inbox">View Chat</Link>
+                    </Button>
+                  ),
+              },
+            ]}
+          />
+          <ListFooter
+            shown={activity.length}
+            total={activityTotal}
+            noun="recipients"
+            suffix={lastUpdatedAt ? ` • Updated ${lastUpdatedAt.toLocaleTimeString()}` : ""}
+            page={activityPage}
+            pageSize={activityPageSize}
+            onPrev={() => setActivityPage((prev) => Math.max(0, prev - 1))}
+            onNext={() => setActivityPage((prev) => prev + 1)}
+            onPageSizeChange={(n) => {
+              setActivityPage(0);
+              setActivityPageSize(n);
+            }}
+            pageSizeOptions={[10, 20, 50, 100]}
+          />
         </CardContent>
       </Card>
     </div>
   );
 }
 
-function KpiCard({
-  label,
-  value,
-  subtitle,
-  tooltip,
-}: {
-  label: string;
-  value: string;
-  subtitle?: string;
-  tooltip?: string;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <p className="inline-flex items-center gap-1 text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
-          {label}
-          {tooltip ? <TooltipHint label={tooltip} /> : null}
-        </p>
-      </CardHeader>
-      <CardContent>
-        <p className="text-3xl font-headline font-semibold">{value}</p>
-        {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
-      </CardContent>
-    </Card>
-  );
-}
 
-function KpiCardSkeleton() {
-  return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-3 w-28" />
-      </CardHeader>
-      <CardContent>
-        <Skeleton className="h-9 w-20" />
-        <Skeleton className="mt-2 h-3 w-24" />
-      </CardContent>
-    </Card>
-  );
-}
 
 function formatDate(value: unknown) {
   if (!value) return "—";

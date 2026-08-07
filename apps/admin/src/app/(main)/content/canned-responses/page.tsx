@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import Link from "next/link";
 import { Pencil, Plus, NotebookPen, Trash2, Zap } from "lucide-react";
-import { PageHeader } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/shell/page-header";
 import {
   createCannedResponse,
   deleteCannedResponse,

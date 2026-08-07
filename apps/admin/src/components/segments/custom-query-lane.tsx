@@ -95,7 +95,7 @@ export function CustomQueryLane({
           >
             <div className="min-w-0">
               <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                <Check className="h-3.5 w-3.5 text-[hsl(var(--success))]" /> {clause.label}
+                <Check className="h-3.5 w-3.5 text-success" /> {clause.label}
               </p>
               <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{clause.predicate}</p>
             </div>

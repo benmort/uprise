@@ -19,14 +19,9 @@ import { StateRegion } from "@/components/shell/state-region";
 import { useToast } from "@/components/ui/toast";
 import { Button, ConfirmDialog, Field, FormDialog, FormSelect, Input, StatusBadge } from "@uprise/ui";
 import { SectionCard } from "@uprise/field";
+import { PROVIDER_LABEL } from "@/lib/integration-sources";
 
 type ConnectionType = "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
-
-const PROVIDER_LABEL: Record<string, string> = {
-  ACTION_NETWORK: "Action Network",
-  NATION_BUILDER: "NationBuilder",
-  INTERNAL: "Internal source",
-};
 
 const TYPE_OPTIONS: { value: ConnectionType; label: string }[] = [
   { value: "ACTION_NETWORK", label: "Action Network" },

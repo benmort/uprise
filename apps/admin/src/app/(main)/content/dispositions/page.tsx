@@ -18,7 +18,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApi } from "@/lib/use-api";
 import { StateRegion } from "@/components/shell/state-region";
-import { PageHeader } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/shell/page-header";
 import { SectionCard } from "@uprise/field";
 import { SupportPill } from "@uprise/field";
 import { SUPPORT_ORDER } from "@uprise/field";

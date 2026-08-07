@@ -181,34 +181,9 @@ export class GeoController {
     return this.geo.densityScale(kind);
   }
 
-  /**
-   * One Mapbox Vector Tile of a geo layer's boundaries. The map source requests
-   * only the tiles it needs at each zoom, so this is the fast, any-zoom replacement
-   * for the per-viewport `GET /geo/areas` GeoJSON. Binary MVT via `@Res()`, which
-   * bypasses the global `{ok,data}` interceptor (same as the analytics `@Sse`).
-   * Long-cacheable — boundaries are static reference data. Feature properties are
-   * `{ code, name, density? }`; `density` is absent where the area is unmeasured.
-   */
-  @Get("tiles/:layer/:z/:x/:y")
-  async tile(
-    @Param("layer") layer: string,
-    @Param("z") z: string,
-    @Param("x") x: string,
-    @Param("y") y: string,
-    @Res() res: Response,
-    // Optional ABS indicator baked onto each feature as `value` — how SA1/meshblock choropleths
-    // paint (client `["match"]` can't scale to 60k/360k features). Absent = the plain boundary tile.
-    @Query("metric") metric?: string,
-  ) {
-    const buf = await this.geo.tile(layer, Number(z), Number(x), Number(y), metric || undefined);
-    res.setHeader("Content-Type", "application/x-protobuf");
-    res.setHeader("Cache-Control", "public, max-age=86400");
-    if (!buf.length) {
-      res.status(204).end();
-      return;
-    }
-    res.send(buf);
-  }
+  // NOTE: the tile route lives in GeoTilesController — it must NOT sit behind this class's
+  // @Roles(ORGANISER), because resolving a role costs the full three-query principal build and a
+  // choropleth requests every tile in the viewport at once. See geo-tiles.controller.ts.
 
   // ── Polling places (booths) — federal (AEC) + state/territory (The Tally Room) ──
 

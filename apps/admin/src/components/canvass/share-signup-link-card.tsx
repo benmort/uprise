@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy, QrCode as QrCodeIcon, Share2, UserPlus } from "lucide-react";
+import { QrCode as QrCodeIcon, Share2, UserPlus } from "lucide-react";
 import { getAuthAppUrl } from "@uprise/api-client";
-import { QrCode } from "@uprise/ui";
+import { QrCode, CopyButton } from "@uprise/ui";
 import { SectionCard } from "@uprise/field";
 import { getSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,6 @@ import { useToast } from "@/components/ui/toast";
 export function ShareSignupLinkCard({ campaignId }: { campaignId?: string }) {
   const { showToast } = useToast();
   const [url, setUrl] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [canShare, setCanShare] = useState(false);
   const [showQr, setShowQr] = useState(false);
 
@@ -40,17 +39,6 @@ export function ShareSignupLinkCard({ campaignId }: { campaignId?: string }) {
     };
   }, [campaignId]);
 
-  const copy = async () => {
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      showToast({ tone: "success", title: "Link copied", description: url });
-    } catch {
-      showToast({ tone: "error", title: "Couldn't copy", description: "Select the link and copy it manually." });
-    }
-  };
 
   const share = async () => {
     if (!url) return;
@@ -80,10 +68,14 @@ export function ShareSignupLinkCard({ campaignId }: { campaignId?: string }) {
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <Button onClick={() => void copy()}>
-                {copied ? <Check className="mr-1.5 h-4 w-4" /> : <Copy className="mr-1.5 h-4 w-4" />}
-                {copied ? "Copied!" : "Copy link"}
-              </Button>
+              <CopyButton
+                value={url}
+                label="Copy link"
+                copiedLabel="Copied!"
+                variant="default"
+                size="default"
+                onCopied={(text) => showToast({ tone: "success", title: "Link copied", description: text })}
+              />
               <Button
                 variant={showQr ? "secondary" : "outline"}
                 aria-pressed={showQr}

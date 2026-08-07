@@ -266,3 +266,153 @@ describe("SessionService", () => {
     await expect(svc.resolve("t")).resolves.toBeNull();
   });
 });
+
+// ── resolveLight + the principal cache (added after a tile burst drained the pool) ──
+describe("SessionService — cheap resolve + cache", () => {
+  const future = () => new Date(Date.now() + 60_000);
+  const past = () => new Date(Date.now() - 60_000);
+
+  /** A prisma stub whose resolve() path succeeds, counting how often each table is hit. */
+  function resolvable() {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue({
+      id: "s1",
+      userId: "u1",
+      token: "t1",
+      expiresAt: future(),
+      tenantId: null,
+      userAgent: null,
+      ipAddress: null,
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.org", isSuperAdmin: false });
+    prisma.tenantMember.findMany.mockResolvedValue([{ tenantId: "t-1", role: "ORGANISER" }]);
+    return prisma;
+  }
+
+  describe("resolveLight", () => {
+    it("answers from ONE indexed lookup — no user, no memberships, no last-seen write", async () => {
+      const prisma = resolvable();
+      const svc = new SessionService(prisma);
+      expect(await svc.resolveLight("t1")).toEqual({ userId: "u1" });
+      expect(prisma.session.findUnique).toHaveBeenCalledTimes(1);
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(prisma.tenantMember.findMany).not.toHaveBeenCalled();
+      expect(prisma.session.update).not.toHaveBeenCalled();
+    });
+
+    // It must not be able to satisfy a @Roles or @RequirePermission gate.
+    it("carries no role and no tenant", async () => {
+      const svc = new SessionService(resolvable());
+      const light = await svc.resolveLight("t1");
+      expect(light).not.toHaveProperty("role");
+      expect(light).not.toHaveProperty("tenantId");
+    });
+
+    it("refuses an expired or unknown token", async () => {
+      const prisma = resolvable();
+      prisma.session.findUnique.mockResolvedValueOnce({ userId: "u1", expiresAt: past() });
+      const svc = new SessionService(prisma);
+      expect(await svc.resolveLight("t1")).toBeNull();
+      prisma.session.findUnique.mockResolvedValueOnce(null);
+      expect(await svc.resolveLight("t1")).toBeNull();
+      expect(await svc.resolveLight("")).toBeNull();
+    });
+  });
+
+  describe("resolve cache", () => {
+    // The whole point: a burst of parallel requests costs one principal build, not twenty.
+    // The case this exists for. A result cache alone does NOT fix it: twenty tile requests arrive
+    // together, so all twenty start before any finishes and every one misses. Sharing the
+    // in-flight promise is what collapses them onto one build.
+    it("collapses a CONCURRENT burst to a single principal build", async () => {
+      const prisma = resolvable();
+      const svc = new SessionService(prisma);
+      const all = await Promise.all(Array.from({ length: 20 }, () => svc.resolve("t1")));
+      expect(prisma.session.findUnique).toHaveBeenCalledTimes(1);
+      expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
+      expect(prisma.tenantMember.findMany).toHaveBeenCalledTimes(1);
+      // Every caller still gets the principal.
+      expect(all.every((r) => r?.userId === "u1")).toBe(true);
+    });
+
+    it("serves the requests that follow the burst from the result cache", async () => {
+      const prisma = resolvable();
+      const svc = new SessionService(prisma);
+      await svc.resolve("t1");
+      await svc.resolve("t1");
+      await svc.resolve("t1");
+      expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns the same principal it would have built", async () => {
+      const prisma = resolvable();
+      const svc = new SessionService(prisma);
+      const first = await svc.resolve("t1");
+      const cached = await svc.resolve("t1");
+      expect(cached).toEqual(first);
+    });
+
+    // Signing out is the revocation people actually perform — it must not wait for the TTL.
+    it("revoke() evicts immediately, so the next resolve hits the database", async () => {
+      const prisma = resolvable();
+      const svc = new SessionService(prisma);
+      await svc.resolve("t1");
+      const before = prisma.session.findUnique.mock.calls.length;
+      await svc.revoke("t1");
+      prisma.session.findUnique.mockResolvedValue(null);
+      expect(await svc.resolve("t1")).toBeNull();
+      expect(prisma.session.findUnique.mock.calls.length).toBeGreaterThan(before);
+    });
+
+    it("revokeAllForUser / revokeById / revokeOthers clear the cache too", async () => {
+      for (const revoke of [
+        (s: SessionService) => s.revokeAllForUser("u1"),
+        (s: SessionService) => s.revokeById("u1", "s1"),
+        (s: SessionService) => s.revokeOthers("u1", "other"),
+      ]) {
+        const prisma = resolvable();
+        const svc = new SessionService(prisma);
+        await svc.resolve("t1");
+        await revoke(svc);
+        prisma.session.findUnique.mockResolvedValue(null);
+        expect(await svc.resolve("t1")).toBeNull();
+      }
+    });
+
+    // A failed resolve must not be remembered, or a just-signed-in user stays locked out.
+    it("never caches a null", async () => {
+      const prisma = resolvable();
+      prisma.session.findUnique.mockResolvedValue(null);
+      const svc = new SessionService(prisma);
+      await svc.resolve("t1");
+      await svc.resolve("t1");
+      expect(prisma.session.findUnique).toHaveBeenCalledTimes(2);
+    });
+
+    // A forced tenant changes what the principal resolves to; reading a cached unforced one
+    // would hand someone the wrong workspace.
+    it("bypasses the cache for a host-forced tenant", async () => {
+      const prisma = resolvable();
+      const svc = new SessionService(prisma);
+      await svc.resolve("t1");
+      const before = prisma.user.findUnique.mock.calls.length;
+      await svc.resolve("t1", undefined, { forcedTenantId: "t-9" });
+      expect(prisma.user.findUnique.mock.calls.length).toBeGreaterThan(before);
+    });
+
+    it("can be switched off entirely with OPS_SESSION_CACHE_MS=0", async () => {
+      const prev = process.env.OPS_SESSION_CACHE_MS;
+      process.env.OPS_SESSION_CACHE_MS = "0";
+      try {
+        const prisma = resolvable();
+        const svc = new SessionService(prisma);
+        await svc.resolve("t1");
+        await svc.resolve("t1");
+        expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
+      } finally {
+        if (prev === undefined) delete process.env.OPS_SESSION_CACHE_MS;
+        else process.env.OPS_SESSION_CACHE_MS = prev;
+      }
+    });
+  });
+});

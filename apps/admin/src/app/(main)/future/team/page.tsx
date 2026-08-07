@@ -5,7 +5,8 @@ import { Button } from '@uprise/ui';
 import { Avatar } from '@uprise/ui';
 import {
   Card, CardContent, CardHeader, CardTitle, } from '@uprise/ui';
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalContent } from "@uprise/ui";
+import { cn } from "@/lib/utils";
 import { useState, useCallback } from 'react';
 import { Suspense } from 'react';
 import { Loader2, PlusCircle, Pencil, Mail, RefreshCw } from "lucide-react";
@@ -350,7 +351,8 @@ function TeamMembers({ refreshTrigger }: { refreshTrigger?: number }) {
         </CardContent>
       </Card>
 
-      <Modal isOpen={editModalOpen} onClose={closeEditModal} className="max-w-md m-4">
+      <Modal open={editModalOpen} onOpenChange={(o) => { if (!o) closeEditModal(); }}>
+        <ModalContent className={cn("p-0", "max-w-md m-4", "bg-surface")}>
         <div className="p-6 sm:p-8">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90 mb-1">
             Edit Member Role
@@ -395,6 +397,7 @@ function TeamMembers({ refreshTrigger }: { refreshTrigger?: number }) {
             </Button>
           </div>
         </div>
+      </ModalContent>
       </Modal>
     </>
   );

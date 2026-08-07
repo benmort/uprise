@@ -19,10 +19,12 @@ import { profile, type UserAvatarResponse, type UserProfileResponse } from "@upr
 import { useToast } from "@/components/ui/toast";
 import { getSession } from "@/lib/session";
 import { emitProfileUpdated } from "@/lib/profile-events";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalContent } from "@uprise/ui";
 import UserProfileCard from "@/components/user-profile/UserProfileCard";
 import AvatarEditCard from "@/components/user-profile/AvatarEditCard";
 import { OriginBackLink } from "@/components/setup/origin-deep-link";
+import { PageHeader } from "@/components/shell/page-header";
+import { cn } from "@/lib/utils";
 
 type Form = {
   displayName: string;
@@ -162,10 +164,7 @@ export default function ProfilePage() {
 
   return (
     <div className="page-stack">
-      <div>
-        <h1 className="text-3xl font-semibold">Profile</h1>
-        <p className="text-sm text-muted-foreground">Your name, avatar and personal details.</p>
-      </div>
+      <PageHeader title="Profile" description="Your name, avatar and personal details." />
 
       <UserProfileCard
         profile={data}
@@ -176,7 +175,8 @@ export default function ProfilePage() {
         onEditAvatar={() => setShowAvatarEdit(true)}
       />
 
-      <Modal isOpen={showAvatarEdit} onClose={() => setShowAvatarEdit(false)} className="m-4 max-w-[700px]">
+      <Modal open={showAvatarEdit} onOpenChange={(o) => { if (!o) (() => setShowAvatarEdit(false))(); }}>
+        <ModalContent className={cn("p-0", "m-4 max-w-[700px]", "bg-surface")}>
         <div className="no-scrollbar max-h-[85vh] overflow-y-auto p-4 lg:p-8">
           <AvatarEditCard
             inModal
@@ -188,6 +188,7 @@ export default function ProfilePage() {
             }}
           />
         </div>
+      </ModalContent>
       </Modal>
 
       {/* Personal information */}

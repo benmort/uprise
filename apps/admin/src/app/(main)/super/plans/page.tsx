@@ -3,7 +3,7 @@
 import { Spinner } from "@uprise/ui";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Archive, ArchiveRestore, ChevronLeft, EyeOff, Pencil, Plus, ShieldAlert, ShieldCheck, Star, X } from "lucide-react";
+import { Archive, ArchiveRestore, EyeOff, Pencil, Plus, ShieldAlert, Star, X } from "lucide-react";
 import { FEATURE_FLAG_KEYS, FLAG_META, NAV_FLAGS, type FeatureFlagKey } from "@uprise/flags";
 import { cn } from "@/lib/utils";
 import { tenants as tenantsApi } from "@uprise/api-client";
@@ -20,7 +20,9 @@ import { Button } from "@uprise/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@uprise/ui";
 import { Input } from "@uprise/ui";
 import { Label } from "@uprise/ui";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalContent } from "@uprise/ui";
+import { SuperPageHeader } from "@/components/super/super-page-header";
+import { flagLabel } from "@/components/super/flag-controls";
 import {
   Table,
   TableBody,
@@ -54,14 +56,6 @@ function isPermissionError(msg: string) {
   return /forbidden|permission|not allowed|403/i.test(msg);
 }
 
-function flagLabel(flag: FeatureFlagKey) {
-  if (NAV_LABEL[flag]) return NAV_LABEL[flag];
-  return flag
-    .replace(/^FEATURE_/, "")
-    .replace(/_ENABLED$/, "")
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 function Toggle({
   checked,
@@ -306,26 +300,19 @@ export default function PlansPage() {
 
   return (
     <main className="page-stack">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Link
-            href="/super/flags"
-            className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ChevronLeft className="h-4 w-4" /> Feature flags
-          </Link>
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 shrink-0 text-primary" />
-            <h1 className="text-2xl font-extrabold">Plans</h1>
-          </div>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+      <SuperPageHeader
+        title="Plans"
+        backHref="/super/flags"
+        backLabel="Feature flags"
+        description={
+          <span className="block max-w-2xl">
             Subscription plans: pricing and limits for the public page, plus the features each one
             grants. A plan&apos;s key must match the network&apos;s plan name. Tenants inherit a
             plan&apos;s entitlements unless a tenant or env override says otherwise.
-          </p>
-        </div>
-        {!denied && !loading && !error ? headerActions : null}
-      </div>
+          </span>
+        }
+        actions={!denied && !loading && !error ? headerActions : null}
+      />
 
       {actionError ? (
         <div className="rounded-lg border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
@@ -513,7 +500,8 @@ export default function PlansPage() {
       )}
 
       {/* Create plan */}
-      <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} className="max-w-md bg-card p-6 text-card-foreground">
+      <Modal open={createOpen} onOpenChange={(o) => { if (!o) (() => setCreateOpen(false))(); }}>
+        <ModalContent className={cn("p-0", "max-w-md bg-card p-6 text-card-foreground", "bg-surface")}>
         <form onSubmit={createPlan} className="space-y-5">
           <div>
             <h2 className="text-lg font-semibold text-foreground">New plan</h2>
@@ -550,17 +538,19 @@ export default function PlansPage() {
             </Button>
           </div>
         </form>
+      </ModalContent>
       </Modal>
 
       {/* Edit plan */}
       <Modal
-        isOpen={editing !== null}
-        onClose={() => {
+        open={editing !== null}
+        onOpenChange={(o) => {
+          if (o) return;
           setEditing(null);
           setForm(null);
         }}
-        className="max-h-[88vh] max-w-2xl overflow-y-auto bg-card p-6 text-card-foreground"
       >
+        <ModalContent className={cn("p-0", "max-h-[88vh] max-w-2xl overflow-y-auto bg-card p-6 text-card-foreground", "bg-surface")}>
         {editing && form ? (
           <form onSubmit={saveEdit} className="space-y-6">
             <div>
@@ -739,6 +729,7 @@ export default function PlansPage() {
             </div>
           </form>
         ) : null}
+      </ModalContent>
       </Modal>
     </main>
   );

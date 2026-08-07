@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { TabNav, TabNavItem } from "@uprise/ui";
+import { RouteTabs } from "@/components/ui/route-tabs";
 
 /**
  * The segmented tab bar across the super-admin tenant-scoped pages — the same control the
@@ -33,12 +32,9 @@ export function TenantTabs() {
     TABS.find((t) => t.suffix && subPath.startsWith(t.suffix))?.key ?? "overview";
 
   return (
-    <TabNav>
-      {TABS.map((t) => (
-        <TabNavItem key={t.key} active={active === t.key} asChild>
-          <Link href={`${base}${t.suffix}`}>{t.label}</Link>
-        </TabNavItem>
-      ))}
-    </TabNav>
+    <RouteTabs
+      tabs={TABS.map((t) => ({ key: t.key, label: t.label, href: `${base}${t.suffix}` }))}
+      active={active}
+    />
   );
 }

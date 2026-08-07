@@ -1,5 +1,8 @@
 import * as React from "react";
-import { cn, PaginationControls } from "@uprise/ui";
+import { cn } from "../lib/utils";
+import { PaginationControls } from "./pagination-controls";
+import { Skeleton } from "./skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./table";
 
 export type DataTableColumn<T> = {
   key: string;
@@ -20,7 +23,8 @@ export type DataTableProps<T> = {
   className?: string;
   /**
    * Client-side rows per page. Defaults to 10 — the shared list default across the admin.
-   * Pass `0` to disable pagination (the caller already paginates its own data, e.g. server-side).
+   * Pass `0` to disable pagination (the caller already paginates its own data, e.g. server-side —
+   * compose with `ListFooter` for the summary + pager in that case).
    */
   pageSize?: number;
   /**
@@ -32,11 +36,23 @@ export type DataTableProps<T> = {
   /** Provide to render a rows-per-page selector (the `per` control). */
   onPageSizeChange?: (pageSize: number) => void;
   pageSizeOptions?: number[];
+  /** Render skeleton rows instead of the body — the loading face of a data surface. */
+  loading?: boolean;
+  skeletonRows?: number;
+  /** Per-row extra classes (e.g. a warning tint on a failing row). */
+  rowClassName?: (row: T) => string | undefined;
+  id?: string;
+  "aria-label"?: string;
 };
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
-/** Light, hairline-ruled table with tabular numerals, and built-in pagination (10 rows/page). */
+/**
+ * The default admin table: config-driven columns over the `Table*` primitives (one visual
+ * source — headers, rules and hover all come from there), tabular numerals, built-in
+ * pagination, and a loading face. For genuinely irregular layouts compose the `Table*`
+ * primitives directly instead.
+ */
 export function DataTable<T>({
   columns,
   rows,
@@ -49,6 +65,11 @@ export function DataTable<T>({
   onPageChange,
   onPageSizeChange,
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
+  loading = false,
+  skeletonRows = 5,
+  rowClassName,
+  id,
+  "aria-label": ariaLabel,
 }: DataTableProps<T>) {
   // Controlled when the caller supplies both `page` and `onPageChange`; else internal state.
   const [internalPage, setInternalPage] = React.useState(0);
@@ -81,59 +102,55 @@ export function DataTable<T>({
   const pageRows = paginated ? rows.slice(safePage * pageSize, safePage * pageSize + pageSize) : rows;
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div id={id} className={cn("space-y-3", className)}>
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-border">
-            {columns.map((col) => (
-              <th
-                key={col.key}
-                className={cn(
-                  "px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground",
-                  col.numeric && "text-right",
-                  col.className,
-                )}
-              >
-                {col.header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={columns.length} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                {empty ?? "No records."}
-              </td>
-            </tr>
-          ) : (
-            pageRows.map((row) => (
-              <tr
-                key={rowKey(row)}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={cn(
-                  "border-b border-[hsl(var(--muted))] last:border-0",
-                  onRowClick && "cursor-pointer hover:bg-surface",
-                )}
-              >
-                {columns.map((col) => (
-                  <td
-                    key={col.key}
-                    className={cn(
-                      "px-4 py-3 text-foreground",
-                      col.numeric && "text-right tabular-nums",
-                      col.className,
-                    )}
-                  >
-                    {col.cell(row)}
-                  </td>
-                ))}
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+        <Table aria-label={ariaLabel}>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              {columns.map((col) => (
+                <TableHead key={col.key} className={cn(col.numeric && "text-right", col.className)}>
+                  {col.header}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              Array.from({ length: Math.max(1, skeletonRows) }, (_unused, i) => (
+                <TableRow key={`skeleton-${i}`} className="hover:bg-transparent">
+                  {columns.map((col) => (
+                    <TableCell key={col.key} className={col.className}>
+                      <Skeleton className={cn("h-4 w-full max-w-32", col.numeric && "ml-auto")} />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : rows.length === 0 ? (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={columns.length} className="py-8 text-center text-muted-foreground">
+                  {empty ?? "No records."}
+                </TableCell>
+              </TableRow>
+            ) : (
+              pageRows.map((row) => (
+                <TableRow
+                  key={rowKey(row)}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  className={cn(onRowClick && "cursor-pointer", rowClassName?.(row))}
+                >
+                  {columns.map((col) => (
+                    <TableCell
+                      key={col.key}
+                      className={cn(col.numeric && "text-right tabular-nums", col.className)}
+                    >
+                      {col.cell(row)}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
       </div>
       {paginated ? (
         <div className="flex items-center justify-end">

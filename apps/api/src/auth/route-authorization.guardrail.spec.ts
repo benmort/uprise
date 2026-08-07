@@ -82,6 +82,13 @@ const OPEN_ROUTES = new Set<string>([
   // the GET must answer before any secret exists. See observability.controller.ts.
   "ObservabilityController#ingestDrain",
   "ObservabilityController#verify",
+  // Vector tiles of ABS/AEC reference geography. Signed-in-only, but authenticated by
+  // BasicAuthGuard.isStaticTilePath with ONE indexed lookup instead of the three-query principal
+  // build — a choropleth requests every tile in the viewport at once and the full build exhausted
+  // the connection pool. The light principal deliberately carries no role, which is exactly why
+  // this route may not sit behind a @Roles gate. The bytes are identical for every caller, carry
+  // no tenant data, and are already served Cache-Control: public.
+  "GeoTilesController#tile",
 ]);
 
 describe("route authorization guardrail", () => {

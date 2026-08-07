@@ -1,15 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { createCampaign } from "@/lib/api/campaigns";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SectionCard } from "@uprise/field";
 import { Wizard, type WizardStep } from "@uprise/ui";
 import { useToast } from "@/components/ui/toast";
+import { PageHeader } from "@/components/shell/page-header";
 
 export default function NewCampaignPage() {
   const router = useRouter();
@@ -80,15 +78,12 @@ export default function NewCampaignPage() {
 
   return (
     <div className="page-stack max-w-xl">
-      <div className="flex items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/canvass">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Canvass
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-extrabold">New campaign</h1>
-      </div>
+      <PageHeader
+        title="New campaign"
+        backHref="/canvass"
+        backLabel="Canvass"
+        breadcrumbs={[{ label: "Canvassing", href: "/canvass" }, { label: "New campaign" }]}
+      />
 
       <Wizard steps={steps} onComplete={() => void create()} completeLabel="Create &amp; cut turf" busy={busy} />
     </div>

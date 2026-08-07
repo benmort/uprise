@@ -8,9 +8,7 @@
 export * from "./components/address-info-card";
 export * from "./components/field-install-notice";
 export * from "./components/campaign-nav-cards";
-export * from "./components/data-table";
 export * from "./components/disposition-pad";
-export * from "./components/kpi-tile";
 export * from "./components/location-gate";
 export * from "./components/map-chrome";
 export * from "./components/map-gesture-toggle";
@@ -20,9 +18,22 @@ export * from "./components/offline-banner";
 export * from "./components/prior-contact-strip";
 export * from "./components/script-assist-panel";
 export * from "./components/canned-response-picker";
-export * from "./components/progress-bar";
 export * from "./components/role-chip";
-export * from "./components/section-card";
+// section-card / data-table / kpi-tile / progress-bar were promoted to @uprise/ui (they
+// were always generic — the admin uses them more than the field app does). Named
+// re-exports keep every existing @uprise/field import working; never `export *` here,
+// which would leak the whole ui barrel through this package.
+export {
+  SectionCard,
+  type SectionCardProps,
+  DataTable,
+  type DataTableColumn,
+  type DataTableProps,
+  KpiTile,
+  type KpiTileProps,
+  ProgressBar,
+  type ProgressBarProps,
+} from "@uprise/ui";
 export * from "./components/support-level";
 export * from "./components/support-level-bar";
 export * from "./components/support-pill";

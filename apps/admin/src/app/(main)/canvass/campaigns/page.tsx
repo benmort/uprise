@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
-import { ArrowLeft, DoorOpen, Flag, Layers, MapPinned, Search } from "lucide-react";
+import { DoorOpen, Flag, Layers, MapPinned, Search } from "lucide-react";
 import {
   getCampaignSummary,
   listCampaigns,
@@ -22,6 +21,7 @@ import { ProgressBar } from "@uprise/field";
 import { CampaignNavCards } from "@uprise/field";
 import { outerRing } from "@/lib/geometry";
 import { CAMPAIGN_COLORS } from "@/components/canvass/campaigns-map";
+import { PageHeader } from "@/components/shell/page-header";
 
 // mapbox-gl touches window — keep the shared map out of SSR.
 const CampaignsMap = dynamic(
@@ -104,20 +104,13 @@ export default function CampaignsIndexPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/canvass">
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Canvass
-            </Link>
-          </Button>
-          <div>
-            <h1 className="text-2xl font-extrabold">Campaigns</h1>
-            <p className="text-sm text-muted-foreground">Every campaign, its claimed turf and where to go next.</p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Campaigns"
+        description="Every campaign, its claimed turf and where to go next."
+        backHref="/canvass"
+        backLabel="Canvass"
+        breadcrumbs={[{ label: "Canvassing", href: "/canvass" }, { label: "Campaigns" }]}
+      />
 
       {hasCampaigns ? (
         <div className="flex flex-wrap items-center gap-2">

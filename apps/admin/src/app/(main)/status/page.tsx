@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Activity, AlertTriangle, ExternalLink, RefreshCw } from "lucide-react";
-import { Button } from "@uprise/ui";
+import { Button, DataTable, RefreshButton } from "@uprise/ui";
 import { SectionCard } from "@uprise/field";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PageHeader } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/shell/page-header";
 import { StateRegion } from "@/components/shell/state-region";
 import { getPlatformStatus, type PlatformStatusResponse } from "@/lib/api";
 
@@ -78,10 +78,7 @@ export default function StatusPage() {
         title="System status"
         description="Health and last deploy for every app uprise runs, across Vercel and Railway."
         actions={
-          <Button size="sm" variant="outline" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <RefreshButton onClick={() => void load()} refreshing={loading} />
         }
       />
 
@@ -112,78 +109,95 @@ export default function StatusPage() {
               title={summary ?? "Status"}
               description={`Checked ${ago(data.at)} · ${data.apps.length} apps`}
             >
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="pb-2 pr-3 font-medium">App</th>
-                      <th className="pb-2 pr-3 font-medium">Host</th>
-                      <th className="pb-2 pr-3 font-medium">Health</th>
-                      <th className="pb-2 pr-3 font-medium">Latency</th>
-                      <th className="pb-2 pr-3 font-medium">Last deploy</th>
-                      <th className="pb-2 font-medium">Commit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.apps.map((app) => {
+              <DataTable
+                aria-label="App status"
+                rows={data.apps}
+                rowKey={(app) => app.key}
+                columns={[
+                  {
+                    key: "app",
+                    header: "App",
+                    cell: (app) => (
+                      <div>
+                        <div className="font-medium text-foreground">{app.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {app.url ? (
+                            <a
+                              href={app.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 hover:text-foreground"
+                            >
+                              {app.project}
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          ) : (
+                            app.project
+                          )}
+                        </div>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "host",
+                    header: "Host",
+                    cell: (app) => <span className="capitalize text-muted-foreground">{app.host}</span>,
+                  },
+                  {
+                    key: "health",
+                    header: "Health",
+                    cell: (app) => {
                       const style = HEALTH_STYLES[app.health] ?? HEALTH_STYLES.unknown;
                       return (
-                        <tr key={app.key} className="border-b border-border/60 last:border-0">
-                          <td className="py-2.5 pr-3">
-                            <div className="font-medium text-foreground">{app.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {app.url ? (
-                                <a
-                                  href={app.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1 hover:text-foreground"
-                                >
-                                  {app.project}
-                                  <ExternalLink className="h-3 w-3" />
-                                </a>
-                              ) : (
-                                app.project
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-2.5 pr-3 capitalize text-muted-foreground">{app.host}</td>
-                          <td className="py-2.5 pr-3">
-                            <span className={`inline-flex items-center gap-1.5 font-medium ${style.text}`}>
-                              <span className={`h-2 w-2 rounded-full ${style.dot}`} aria-hidden />
-                              {style.label}
-                            </span>
-                            {app.detail ? (
-                              <div className="text-xs text-muted-foreground">{app.detail}</div>
-                            ) : null}
-                          </td>
-                          <td className="py-2.5 pr-3 tabular-nums text-muted-foreground">
-                            {app.latencyMs === undefined ? "—" : `${app.latencyMs}ms`}
-                          </td>
-                          <td className="py-2.5 pr-3 text-muted-foreground">
-                            {ago(app.deploy?.at)}
-                            {app.deploy?.state ? (
-                              <div className="text-xs">{app.deploy.state}</div>
-                            ) : null}
-                          </td>
-                          <td className="py-2.5">
-                            {app.deploy?.sha ? (
-                              <code className="rounded bg-surface-variant px-1.5 py-0.5 text-xs">
-                                {app.deploy.sha.slice(0, 7)}
-                              </code>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                            {app.deploy?.target ? (
-                              <div className="text-xs text-muted-foreground">{app.deploy.target}</div>
-                            ) : null}
-                          </td>
-                        </tr>
+                        <div>
+                          <span className={`inline-flex items-center gap-1.5 font-medium ${style.text}`}>
+                            <span className={`h-2 w-2 rounded-full ${style.dot}`} aria-hidden />
+                            {style.label}
+                          </span>
+                          {app.detail ? <div className="text-xs text-muted-foreground">{app.detail}</div> : null}
+                        </div>
                       );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                    },
+                  },
+                  {
+                    key: "latency",
+                    header: "Latency",
+                    cell: (app) => (
+                      <span className="tabular-nums text-muted-foreground">
+                        {app.latencyMs === undefined ? "—" : `${app.latencyMs}ms`}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "deploy",
+                    header: "Last deploy",
+                    cell: (app) => (
+                      <span className="text-muted-foreground">
+                        {ago(app.deploy?.at)}
+                        {app.deploy?.state ? <div className="text-xs">{app.deploy.state}</div> : null}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "commit",
+                    header: "Commit",
+                    cell: (app) => (
+                      <div>
+                        {app.deploy?.sha ? (
+                          <code className="rounded bg-surface-variant px-1.5 py-0.5 text-xs">
+                            {app.deploy.sha.slice(0, 7)}
+                          </code>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                        {app.deploy?.target ? (
+                          <div className="text-xs text-muted-foreground">{app.deploy.target}</div>
+                        ) : null}
+                      </div>
+                    ),
+                  },
+                ]}
+              />
             </SectionCard>
           </div>
         ) : null}

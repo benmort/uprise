@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   createAudience,
@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AudienceHeader } from "@/components/audience/audience-header";
 import { AudienceTabs, resolveAudienceTab } from "@/components/audience/audience-tabs";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Select, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -30,6 +31,7 @@ import { fuzzyIncludes } from "@/lib/fuzzy";
 import { Split } from "lucide-react";
 import Link from "next/link";
 import { useFlag } from "@/components/flags/flags-provider";
+import { DataTable, ListFooter } from "@uprise/ui";
 
 type AudienceRow = {
   id: string;
@@ -118,7 +120,6 @@ export default function AudiencePage() {
   const searchParams = useSearchParams();
   const { showToast } = useToast();
   const segmentsEnabled = useFlag("FEATURE_SEGMENTS_ENABLED");
-  const filterRef = useRef<HTMLInputElement | null>(null);
   const [rows, setRows] = useState<AudienceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingError, setLoadingError] = useState("");
@@ -181,18 +182,6 @@ export default function AudiencePage() {
     }
   }, [filter]);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "/") return;
-      const target = event.target as HTMLElement | null;
-      const tag = target?.tagName.toLowerCase();
-      if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
-      event.preventDefault();
-      filterRef.current?.focus();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -471,12 +460,12 @@ export default function AudiencePage() {
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>Segmented Audiences</CardTitle>
           <div className="flex gap-2">
-            <Input
-              ref={filterRef}
+            <SearchInput
+              focusKey="/"
               placeholder="Filter lists..."
               value={filter}
-              onChange={(e) => {
-                setFilter(e.target.value);
+              onValueChange={(v) => {
+                setFilter(v);
                 setTablePage(0);
               }}
             />
@@ -498,135 +487,133 @@ export default function AudiencePage() {
             />
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
-                      <th className="py-2 pr-4">Audience Name</th>
-                      <th className="py-2 pr-4">Source</th>
-                      <th className="py-2 pr-4">Channel</th>
-                      <th className="py-2 pr-4">Subscribers</th>
-                      <th className="py-2 pr-4">Last Sync</th>
-                      <th className="py-2 pr-4">Upload Progress</th>
-                      <th className="py-2 pr-4">Status</th>
-                      <th className="py-2 pr-4">Quick Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mergeSyncBadges(paged, syncJobs).map((row) => {
+              <DataTable
+                aria-label="Audiences"
+                rows={mergeSyncBadges(paged, syncJobs)}
+                rowKey={(row) => row.id}
+                pageSize={0}
+                onRowClick={(row) => router.push(`/audience/${row.id}`)}
+                empty="No audiences match your current filters."
+                columns={[
+                  {
+                    key: "name",
+                    header: "Audience Name",
+                    cell: (row) => (
+                      <div>
+                        <p className="font-medium">{row.name}</p>
+                        <p className="text-xs text-muted-foreground">ID: {row.id}</p>
+                      </div>
+                    ),
+                  },
+                  { key: "source", header: "Source", cell: (row) => row.source },
+                  {
+                    key: "channel",
+                    header: "Channel",
+                    cell: (row) => (
+                      <span
+                        className={
+                          "rounded-full px-2 py-0.5 text-[11px] font-semibold " +
+                          (row.channel === "WHATSAPP"
+                            ? "bg-success/15 text-success"
+                            : "bg-surface-variant text-muted-foreground")
+                        }
+                      >
+                        {CHANNEL_LABEL[row.channel ?? "ALL"] ?? "Both"}
+                        {row.kind === "WHATSAPP_OPTED_IN" ? " · smart" : ""}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "subscribers",
+                    header: "Subscribers",
+                    cell: (row) => Number(row._count?.contacts || 0).toLocaleString(),
+                  },
+                  {
+                    key: "synced",
+                    header: "Last Sync",
+                    cell: (row) => (
+                      <span className="text-muted-foreground">
+                        {row.syncedAt ? new Date(row.syncedAt).toLocaleString() : "Never"}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "progress",
+                    header: "Upload Progress",
+                    cell: (row) => {
                       const isUploading = uploadState?.audienceId === row.id;
-                      const progressPercent = uploadState ? clampProgress(uploadState.progress) : 0;
-                      const progressDetails = uploadState ? getUploadProgressDetails(uploadState) : "";
+                      if (!isUploading || !uploadState) return <span className="text-xs text-muted-foreground">—</span>;
+                      const progressPercent = clampProgress(uploadState.progress);
+                      const progressDetails = getUploadProgressDetails(uploadState);
                       return (
-                        <tr
-                          key={row.id}
-                          className="group cursor-pointer border-b border-border/70 hover:bg-primary-container/10"
-                          onClick={() => router.push(`/audience/${row.id}`)}
-                        >
-                          <td className="py-3 pr-4">
-                            <p className="font-medium">{row.name}</p>
-                            <p className="text-xs text-muted-foreground">ID: {row.id}</p>
-                          </td>
-                          <td className="py-3 pr-4">{row.source}</td>
-                          <td className="py-3 pr-4">
-                            <span
-                              className={
-                                "rounded-full px-2 py-0.5 text-[11px] font-semibold " +
-                                (row.channel === "WHATSAPP"
-                                  ? "bg-[hsl(var(--success))]/15 text-[hsl(var(--success))]"
-                                  : "bg-surface-variant text-muted-foreground")
-                              }
-                            >
-                              {CHANNEL_LABEL[row.channel ?? "ALL"] ?? "Both"}
-                              {row.kind === "WHATSAPP_OPTED_IN" ? " · smart" : ""}
-                            </span>
-                          </td>
-                          <td className="py-3 pr-4">{Number(row._count?.contacts || 0).toLocaleString()}</td>
-                          <td className="py-3 pr-4 text-muted-foreground">
-                            {row.syncedAt ? new Date(row.syncedAt).toLocaleString() : "Never"}
-                          </td>
-                          <td className="py-3 pr-4">
-                            {isUploading ? (
-                              <div className="w-44 space-y-1">
-                                <div
-                                  className="h-2 rounded-full bg-surface-variant"
-                                  role="progressbar"
-                                  aria-valuemin={0}
-                                  aria-valuemax={100}
-                                  aria-valuenow={progressPercent}
-                                  aria-label="Audience import progress"
-                                >
-                                  {uploadState.status === "FAILED" ? (
-                                    <div
-                                      className="h-2 rounded-full bg-error transition-all"
-                                      style={{ width: "100%" }}
-                                    />
-                                  ) : (
-                                    <div
-                                      className={`h-2 rounded-full transition-all ${
-                                        uploadState.status === "COMPLETED" ? "bg-success" : "bg-primary"
-                                      }`}
-                                      style={{ width: `${progressPercent}%` }}
-                                    />
-                                  )}
-                                </div>
-                                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                                  <span>{getUploadProgressLabel(uploadState)}</span>
-                                  <span>{progressPercent}%</span>
-                                </div>
-                                {progressDetails && (
-                                  <p className="text-xs text-muted-foreground">{progressDetails}</p>
-                                )}
-                              </div>
+                        <div className="w-44 space-y-1">
+                          <div
+                            className="h-2 rounded-full bg-surface-variant"
+                            role="progressbar"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={progressPercent}
+                            aria-label="Audience import progress"
+                          >
+                            {uploadState.status === "FAILED" ? (
+                              <div className="h-2 rounded-full bg-error transition-all" style={{ width: "100%" }} />
                             ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
+                              <div
+                                className={`h-2 rounded-full transition-all ${
+                                  uploadState.status === "COMPLETED" ? "bg-success" : "bg-primary"
+                                }`}
+                                style={{ width: `${progressPercent}%` }}
+                              />
                             )}
-                          </td>
-                          <td className="py-3 pr-4">
-                            <StatusBadge
-                              status={isUploading ? uploadState.status : (row.syncBadge ?? row.status)}
-                            />
-                          </td>
-                          <td className="py-3 pr-4">
-                            <div className="flex items-center gap-2 opacity-60 transition group-hover:opacity-100">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  router.push(`/audience/${row.id}`);
-                                }}
-                              >
-                                View
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                            <span>{getUploadProgressLabel(uploadState)}</span>
+                            <span>{progressPercent}%</span>
+                          </div>
+                          {progressDetails && <p className="text-xs text-muted-foreground">{progressDetails}</p>}
+                        </div>
                       );
-                    })}
-                    {paged.length === 0 && (
-                      <tr>
-                        <td colSpan={8} className="py-6 text-center text-muted-foreground">
-                          No audiences match your current filters.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">
-                  Showing {paged.length} of {filtered.length} audiences
-                  {lastUpdatedAt ? ` • Updated ${lastUpdatedAt.toLocaleTimeString()}` : ""}
-                </p>
-                <PaginationControls
-                  page={tablePage}
-                  pageSize={pageSize}
-                  total={filtered.length}
-                  onPrev={() => setTablePage((p) => Math.max(0, p - 1))}
-                  onNext={() => setTablePage((p) => p + 1)}
-                />
-              </div>
+                    },
+                  },
+                  {
+                    key: "status",
+                    header: "Status",
+                    cell: (row) => (
+                      <StatusBadge
+                        status={
+                          uploadState?.audienceId === row.id ? uploadState.status : (row.syncBadge ?? row.status)
+                        }
+                      />
+                    ),
+                  },
+                  {
+                    key: "actions",
+                    header: "Quick Actions",
+                    cell: (row) => (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          router.push(`/audience/${row.id}`);
+                        }}
+                      >
+                        View
+                      </Button>
+                    ),
+                  },
+                ]}
+              />
+              <ListFooter
+                shown={paged.length}
+                total={filtered.length}
+                noun="audiences"
+                suffix={lastUpdatedAt ? ` • Updated ${lastUpdatedAt.toLocaleTimeString()}` : ""}
+                page={tablePage}
+                pageSize={pageSize}
+                onPrev={() => setTablePage((p) => Math.max(0, p - 1))}
+                onNext={() => setTablePage((p) => p + 1)}
+              />
             </>
           )}
         </CardContent>

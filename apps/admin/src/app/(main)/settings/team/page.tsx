@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Check, PlusCircle, Users } from "lucide-react";
+import { Check, PlusCircle, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -28,6 +27,8 @@ import {
   type TenantMemberSummary,
 } from "@uprise/api-client";
 import { getSession } from "@/lib/session";
+import { PageHeader } from "@/components/shell/page-header";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@uprise/ui";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 function relativeTime(iso: string): string {
@@ -451,18 +452,17 @@ export default function TeamPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/settings">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Settings
-          </Link>
-        </Button>
-        <div className="flex items-center gap-2">
-          <Users className="h-6 w-6 shrink-0 text-primary" />
-          <h1 className="text-2xl font-extrabold">Team</h1>
-        </div>
-      </div>
+      <PageHeader
+        icon={Users}
+        title="Team"
+        backHref="/settings"
+        backLabel="Settings"
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Settings", href: "/settings" },
+          { label: "Team" },
+        ]}
+      />
 
       {/* Settings tab bar — Team is the last tab (mirrors the Data explorer's separate-page tabs). */}
       <SettingsTabs active="team" isSuperAdmin={isSuperAdmin} isOwner={isOwner} />
@@ -754,33 +754,34 @@ export default function TeamPage() {
             title="Roles & permissions"
             description="What each role can do. The source of truth is the API's permission guards; this mirrors them."
           >
+            {/* Irregular layout (centred tick columns) — the raw Table* escape hatch. */}
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                    <th className="py-2">Capability</th>
-                    <th className="py-2 text-center">Owner</th>
-                    <th className="py-2 text-center">Organiser</th>
-                    <th className="py-2 text-center">Volunteer</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Capability</TableHead>
+                    <TableHead className="text-center">Owner</TableHead>
+                    <TableHead className="text-center">Organiser</TableHead>
+                    <TableHead className="text-center">Volunteer</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {SCOPES.map((s) => (
-                    <tr key={s.label} className="border-t border-[hsl(var(--muted))]">
-                      <td className="py-2 text-foreground">{s.label}</td>
-                      <td className="py-2 text-center">
+                    <TableRow key={s.label}>
+                      <TableCell className="text-foreground">{s.label}</TableCell>
+                      <TableCell className="text-center">
                         {s.owner ? <Check className="mx-auto h-4 w-4 text-success" /> : "–"}
-                      </td>
-                      <td className="py-2 text-center">
+                      </TableCell>
+                      <TableCell className="text-center">
                         {s.organiser ? <Check className="mx-auto h-4 w-4 text-success" /> : "–"}
-                      </td>
-                      <td className="py-2 text-center">
+                      </TableCell>
+                      <TableCell className="text-center">
                         {s.volunteer ? <Check className="mx-auto h-4 w-4 text-success" /> : "–"}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </SectionCard>
         </>

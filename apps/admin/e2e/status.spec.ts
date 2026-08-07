@@ -28,7 +28,9 @@ test.describe("public status page", () => {
     ]) {
       await expect(page.getByText(service, { exact: true })).toBeVisible();
     }
-    await expect(page.getByText(/last 90 days/i)).toBeVisible();
+    // .first(): with no recent incidents the page ALSO says "No incidents recorded in the
+    // last 90 days.", which would trip strict mode on incident-free (i.e. healthy) data.
+    await expect(page.getByText(/last 90 days/i).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: /recent incidents/i })).toBeVisible();
     // Either a summary word or the "can't reach the status service" admission — never nothing.
     await expect(

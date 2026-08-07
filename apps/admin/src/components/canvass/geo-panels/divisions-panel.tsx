@@ -26,7 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { cn } from "@/lib/utils";
-import { Spinner } from "@uprise/ui";
+import { Spinner, DataTable, ListFooter } from "@uprise/ui";
 import { type WalkMode } from "@uprise/field";
 import { AutoAccordionGroup, CollapsibleCard } from "./collapsible-card";
 
@@ -253,98 +253,86 @@ export function DivisionsPanel({ view }: { view: WalkMode }) {
       >
         <Card>
           <CardContent className="space-y-4 pt-6">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
-                    <th className="py-2 pr-4">Division</th>
-                    <th className="py-2 pr-4">State</th>
-                    <th className="py-2 pr-4">Addresses</th>
-                    <th className="py-2 pr-4">Quick Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paged.map((d) => (
-                    <tr
-                      key={d.code}
-                      className="group cursor-pointer border-b border-border/60 hover:bg-primary-container/10"
-                      onClick={() => router.push(`/data/divisions/${type}/${encodeURIComponent(d.code)}`)}
-                    >
-                      <td className="py-3 pr-4">
-                        <Link
-                          href={`/data/divisions/${type}/${encodeURIComponent(d.code)}`}
-                          className="font-medium text-primary hover:underline"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          {d.name}
-                        </Link>
-                        <p className="text-xs text-muted-foreground">{d.code}</p>
-                      </td>
-                      <td className="py-3 pr-4 text-muted-foreground">{d.state ?? "–"}</td>
-                      <td className="py-3 pr-4 tabular-nums">{d.addressCount.toLocaleString()}</td>
-                      <td className="py-3 pr-4">
-                        <div className="flex items-center gap-2 opacity-60 transition group-hover:opacity-100">
-                          {(() => {
-                            const cov = coveredBy({ kind: "division", type, code: d.code, stateDigit: divDigit(d.state) });
-                            return (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                disabled={!!cov}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  if (hasDivision(type, d.code)) removeDivision(type, d.code);
-                                  else addDiv(d);
-                                }}
-                              >
-                                {cov ? (
-                                  <><Check className="mr-1.5 h-3.5 w-3.5" />In {cov}</>
-                                ) : hasDivision(type, d.code) ? (
-                                  <><Check className="mr-1.5 h-3.5 w-3.5" />Added</>
-                                ) : (
-                                  <><Plus className="mr-1.5 h-3.5 w-3.5" />My turf</>
-                                )}
-                              </Button>
-                            );
-                          })()}
+            <DataTable
+              aria-label="Divisions"
+              rows={paged}
+              rowKey={(d) => d.code}
+              pageSize={0}
+              onRowClick={(d) => router.push(`/data/divisions/${type}/${encodeURIComponent(d.code)}`)}
+              empty={`No divisions${q ? ` match “${q.trim()}”` : ""}.`}
+              columns={[
+                {
+                  key: "division",
+                  header: "Division",
+                  cell: (d) => (
+                    <div>
+                      <Link
+                        href={`/data/divisions/${type}/${encodeURIComponent(d.code)}`}
+                        className="font-medium text-primary hover:underline"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {d.name}
+                      </Link>
+                      <p className="text-xs text-muted-foreground">{d.code}</p>
+                    </div>
+                  ),
+                },
+                { key: "state", header: "State", cell: (d) => <span className="text-muted-foreground">{d.state ?? "–"}</span> },
+                { key: "addresses", header: "Addresses", cell: (d) => <span className="tabular-nums">{d.addressCount.toLocaleString()}</span> },
+                {
+                  key: "actions",
+                  header: "Quick Actions",
+                  cell: (d) => (
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        const cov = coveredBy({ kind: "division", type, code: d.code, stateDigit: divDigit(d.state) });
+                        return (
                           <Button
                             size="sm"
-                            variant="outline"
-                            disabled={busy === d.code}
+                            variant="ghost"
+                            disabled={!!cov}
                             onClick={(event) => {
                               event.stopPropagation();
-                              void cutFromDivision(d);
+                              if (hasDivision(type, d.code)) removeDivision(type, d.code);
+                              else addDiv(d);
                             }}
                           >
-                            <Scissors className="mr-1.5 h-3.5 w-3.5" />
-                            {busy === d.code ? (<><Spinner className="mr-2" />Cutting…</>) : "Cut turf"}
+                            {cov ? (
+                              <><Check className="mr-1.5 h-3.5 w-3.5" />In {cov}</>
+                            ) : hasDivision(type, d.code) ? (
+                              <><Check className="mr-1.5 h-3.5 w-3.5" />Added</>
+                            ) : (
+                              <><Plus className="mr-1.5 h-3.5 w-3.5" />My turf</>
+                            )}
                           </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {paged.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="py-6 text-center text-muted-foreground">
-                        No divisions{q ? ` match “${q.trim()}”` : ""}.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">
-                Showing {paged.length} of {filtered.length} divisions
-              </p>
-              <PaginationControls
-                page={page}
-                pageSize={pageSize}
-                total={filtered.length}
-                onPrev={() => setPage((prev) => Math.max(0, prev - 1))}
-                onNext={() => setPage((prev) => prev + 1)}
-              />
-            </div>
+                        );
+                      })()}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy === d.code}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void cutFromDivision(d);
+                        }}
+                      >
+                        <Scissors className="mr-1.5 h-3.5 w-3.5" />
+                        {busy === d.code ? (<><Spinner className="mr-2" />Cutting…</>) : "Cut turf"}
+                      </Button>
+                    </div>
+                  ),
+                },
+              ]}
+            />
+            <ListFooter
+              shown={paged.length}
+              total={filtered.length}
+              noun="divisions"
+              page={page}
+              pageSize={pageSize}
+              onPrev={() => setPage((prev) => Math.max(0, prev - 1))}
+              onNext={() => setPage((prev) => prev + 1)}
+            />
           </CardContent>
         </Card>
       </StateRegion>

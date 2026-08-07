@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { TabNav, TabNavItem } from "@uprise/ui";
+import { RouteTabs } from "@/components/ui/route-tabs";
 
 /**
  * The segmented tab bar across the top of the Audience surface — the same shape the /data
@@ -30,15 +29,5 @@ export function resolveAudienceTab(raw: string | null | undefined): AudienceTab 
 }
 
 export function AudienceTabs({ active }: { active: AudienceTab }) {
-  return (
-    <TabNav>
-      {TABS.map((t) => (
-        <TabNavItem key={t.key} active={active === t.key} asChild>
-          <Link href={t.href} scroll={false}>
-            {t.label}
-          </Link>
-        </TabNavItem>
-      ))}
-    </TabNav>
-  );
+  return <RouteTabs tabs={TABS} active={active} scroll={false} />;
 }

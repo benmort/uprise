@@ -6,6 +6,7 @@ import { getOptOuts, getRecentBlasts } from "@/lib/api";
 import { KpiTile } from "@uprise/field";
 import { Button } from "@/components/ui/button";
 import { ChannelCampaignsView, normaliseChannel } from "@/components/channels/channel-campaigns-view";
+import { PageHeader } from "@/components/shell/page-header";
 
 type ChannelKpis = { blasts: number; recipients: number; awaiting: number; optOuts: number };
 
@@ -36,17 +37,11 @@ export default function TextChannelPage() {
 
   return (
     <div className="page-stack">
-      <div className="section-stack">
-        <div>
-          <div className="flex items-center gap-2">
-            <MessageSquareText className="h-6 w-6 shrink-0 text-primary" />
-            <h1 className="text-2xl font-extrabold">Text (SMS)</h1>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Your SMS campaigns, delivery and compliance in one place.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={MessageSquareText}
+        title="Text (SMS)"
+        description="Your SMS campaigns, delivery and compliance in one place."
+      />
 
       {kpisError ? (
         <div className="flex items-center justify-between gap-3 rounded border border-error/40 bg-error-container px-3 py-2 text-sm text-error">

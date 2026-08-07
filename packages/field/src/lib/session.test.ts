@@ -12,7 +12,7 @@ vi.mock("@uprise/api-client", () => ({
 }));
 
 import { auth } from "@uprise/api-client";
-import { getSession, goToLogin, logout } from "./session";
+import { getSession, goToLogin, logout, probeSession } from "./session";
 
 const mockCheck = auth.checkSession as unknown as ReturnType<typeof vi.fn>;
 const mockLogout = auth.logout as unknown as ReturnType<typeof vi.fn>;
@@ -29,8 +29,39 @@ describe("getSession", () => {
   });
 
   it("returns null when the session check fails", async () => {
-    mockCheck.mockResolvedValueOnce({ ok: false, error: "unauthorised" });
+    mockCheck.mockResolvedValueOnce({ ok: false, error: "unauthorised", status: 401 });
     expect(await getSession()).toBeNull();
+  });
+});
+
+describe("probeSession", () => {
+  beforeEach(() => {
+    mockCheck.mockClear();
+  });
+
+  it("reports authed with the principal", async () => {
+    const user = { id: "u1", email: "a@b.co" };
+    mockCheck.mockResolvedValueOnce({ ok: true, data: { user } });
+    expect(await probeSession()).toEqual({ state: "authed", user });
+  });
+
+  it("reports signed-out when the API answers ok with no user", async () => {
+    mockCheck.mockResolvedValueOnce({ ok: true, data: { user: null } });
+    expect(await probeSession()).toEqual({ state: "signed-out" });
+  });
+
+  it("reports signed-out on a definitive 401/403", async () => {
+    mockCheck.mockResolvedValueOnce({ ok: false, error: "unauthorised", status: 401 });
+    expect(await probeSession()).toEqual({ state: "signed-out" });
+    mockCheck.mockResolvedValueOnce({ ok: false, error: "forbidden", status: 403 });
+    expect(await probeSession()).toEqual({ state: "signed-out" });
+  });
+
+  it("reports unreachable — NOT signed-out — on a network failure or 5xx", async () => {
+    mockCheck.mockResolvedValueOnce({ ok: false, error: "fetch failed", status: 0 });
+    expect(await probeSession()).toEqual({ state: "unreachable", error: "fetch failed" });
+    mockCheck.mockResolvedValueOnce({ ok: false, error: "bad gateway", status: 502 });
+    expect(await probeSession()).toEqual({ state: "unreachable", error: "bad gateway" });
   });
 });
 

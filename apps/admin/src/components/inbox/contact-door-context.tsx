@@ -46,7 +46,7 @@ export function ContactDoorContext({ phone }: { phone: string }) {
       {knocks.map((k) => (
         <span
           key={k.id}
-          className="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--knock))]/[0.1] px-2 py-0.5 text-[11px] font-medium text-[hsl(var(--knock))]"
+          className="inline-flex items-center gap-1 rounded-full bg-knock/[0.1] px-2 py-0.5 text-[11px] font-medium text-knock"
         >
           <DoorOpen className="h-3 w-3" />
           {k.kind === "knock" && k.dispositionCode

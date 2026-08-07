@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { FormDialog } from "@uprise/ui";
 import { Input } from "@/components/ui/input";
+import { Field } from "@uprise/ui";
 import { useToast } from "@/components/ui/toast";
 import { testIntegrationConnection, upsertIntegrationConnection } from "@/lib/api";
 import {
@@ -99,40 +100,45 @@ export function ConnectNationBuilderDialog({
       busy={busy}
     >
       <div className="space-y-4">
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium">Nation address</span>
-          <div className="flex items-center gap-2">
-            <Input
-              value={slugInput}
-              onChange={(e) => setSlugInput(e.target.value)}
-              placeholder="castle-hill"
-              aria-label="Nation address"
-              autoFocus
-            />
-            <span className="shrink-0 text-sm text-muted-foreground">.nationbuilder.com</span>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Your nation's web address – paste the full address and we'll trim it for you.
-          </p>
+        <div>
+          <Field
+            label="Nation address"
+            htmlFor="nb-connect-slug"
+            hint="Your nation's web address – paste the full address and we'll trim it for you."
+          >
+            <div className="flex items-center gap-2">
+              <Input
+                id="nb-connect-slug"
+                value={slugInput}
+                onChange={(e) => setSlugInput(e.target.value)}
+                placeholder="castle-hill"
+                aria-label="Nation address"
+                autoFocus
+              />
+              <span className="shrink-0 text-sm text-muted-foreground">.nationbuilder.com</span>
+            </div>
+          </Field>
           {errors.slug && <p className="mt-1 text-xs text-error">{errors.slug}</p>}
-        </label>
+        </div>
 
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium">API token</span>
-          <Input
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="Paste your API token"
-            aria-label="API token"
-            autoComplete="off"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">
-            In your nation's control panel, open Settings → Developer → API token and copy the
-            token. uprise stores it securely and only your organisation can use it.
-          </p>
+        <div>
+          <Field
+            label="API token"
+            htmlFor="nb-connect-token"
+            hint="In your nation's control panel, open Settings → Developer → API token and copy the token. uprise stores it securely and only your organisation can use it."
+          >
+            <Input
+              id="nb-connect-token"
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="Paste your API token"
+              aria-label="API token"
+              autoComplete="off"
+            />
+          </Field>
           {errors.token && <p className="mt-1 text-xs text-error">{errors.token}</p>}
-        </label>
+        </div>
 
         {failure && <p className="text-sm text-error">{failure}</p>}
       </div>

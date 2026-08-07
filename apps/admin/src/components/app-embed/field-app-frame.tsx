@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ExternalLink, Monitor, Smartphone } from "lucide-react";
-import { PageHeader } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/shell/page-header";
 import { cn } from "@/lib/utils";
 
 /**

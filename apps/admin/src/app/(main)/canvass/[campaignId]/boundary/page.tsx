@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Save, Trash2 } from "lucide-react";
 import { Spinner } from "@uprise/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +26,7 @@ import { heatFill, heatFilter, heatNoDataFilter, heatOpacity } from "@/lib/canva
 import { useChartPalette } from "@/components/insights/use-poll-palette";
 import { HeatLegend } from "@/components/canvass/heat-panel";
 import type { SelectedArea } from "@/components/canvass/turf-draw-map";
+import { PageHeader } from "@/components/shell/page-header";
 
 // mapbox-gl + draw touch window: keep them out of SSR.
 const TurfDrawMap = dynamic(
@@ -245,15 +245,12 @@ export default function CampaignBoundaryPage() {
   if (noPermission || loadError) {
     return (
       <div className="page-stack">
-        <div className="flex items-center gap-2">
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/canvass">
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Canvass
-            </Link>
-          </Button>
-          <h1 className="text-2xl font-extrabold">Campaign boundary</h1>
-        </div>
+        <PageHeader
+          title="Campaign boundary"
+          backHref="/canvass"
+          backLabel="Canvass"
+          breadcrumbs={[{ label: "Canvassing", href: "/canvass" }, { label: "Campaign boundary" }]}
+        />
         <StateRegion
           error={loadError}
           noPermission={noPermission}
@@ -268,21 +265,20 @@ export default function CampaignBoundaryPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/canvass">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Canvass
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-extrabold">Campaign boundary</h1>
-        {previewing ? (
-          <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Spinner className="h-3.5 w-3.5" />
-            Updating boundary…
-          </span>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Campaign boundary"
+        backHref="/canvass"
+        backLabel="Canvass"
+        breadcrumbs={[{ label: "Canvassing", href: "/canvass" }, { label: "Campaign boundary" }]}
+        titleAccessory={
+          previewing ? (
+            <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Spinner className="h-3.5 w-3.5" />
+              Updating boundary…
+            </span>
+          ) : null
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="relative h-[60vh] overflow-hidden rounded-2xl border border-border">

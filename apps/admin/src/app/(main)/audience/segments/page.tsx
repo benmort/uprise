@@ -17,6 +17,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
+import { PageHeader } from "@/components/shell/page-header";
 
 /**
  * The segment-definition list — reusable audience queries over the contact
@@ -64,19 +65,22 @@ export default function SegmentsPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold">Searches</h1>
-          <p className="text-sm text-muted-foreground">
-            Reusable audience definitions — evaluated live, targetable from any blast.
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/audience/segments/new">
-            <Plus className="mr-1.5 h-4 w-4" /> New search
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="Searches"
+        description="Reusable audience definitions — evaluated live, targetable from any blast."
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Audience", href: "/audience" },
+          { label: "Searches" },
+        ]}
+        actions={
+          <Button asChild>
+            <Link href="/audience/segments/new">
+              <Plus className="mr-1.5 h-4 w-4" /> New search
+            </Link>
+          </Button>
+        }
+      />
 
       {segments == null ? (
         <div className="space-y-3">

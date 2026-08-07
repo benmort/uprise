@@ -3,7 +3,8 @@
 import { Spinner } from "@uprise/ui";
 import { useState, useRef } from 'react';
 import { Button } from '@uprise/ui';
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalContent } from "@uprise/ui";
+import { cn } from "@/lib/utils";
 import { Skeleton } from '@uprise/ui';
 import {
   FormCreditCard, FormBillingDetails, type FormCreditCardRef, type BillingDetailsFormValues, } from '@/components/prog/shared/forms';
@@ -480,11 +481,8 @@ function CurrentPlan() {
           </div>
 
         {/* Update Billing Information Modal */}
-        <Modal
-          isOpen={billingAddressModalOpen}
-          onClose={() => setBillingAddressModalOpen(false)}
-          className="max-w-lg m-4"
-        >
+        <Modal open={billingAddressModalOpen} onOpenChange={(o) => { if (!o) setBillingAddressModalOpen(false); }}>
+          <ModalContent className={cn("p-0", "max-w-lg m-4", "bg-surface")}>
           <div className="p-6 sm:p-8">
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90 mb-1">
               Update Billing Information
@@ -516,14 +514,12 @@ function CurrentPlan() {
               </Button>
             </div>
           </div>
+        </ModalContent>
         </Modal>
 
         {/* Add New Card Modal */}
-        <Modal
-          isOpen={addCardModalOpen}
-          onClose={() => !isAddCardPending && setAddCardModalOpen(false)}
-          className="max-w-md m-4"
-        >
+        <Modal open={addCardModalOpen} onOpenChange={(o) => { if (!o) { if (!isAddCardPending) setAddCardModalOpen(false); } }}>
+          <ModalContent className={cn("p-0", "max-w-md m-4", "bg-surface")}>
           <div className="p-6 sm:p-8">
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90 mb-1">
               Add New Card
@@ -572,6 +568,7 @@ function CurrentPlan() {
               </Button>
             </div>
           </div>
+        </ModalContent>
         </Modal>
 
         {/* Invoices */}

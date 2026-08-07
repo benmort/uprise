@@ -39,6 +39,7 @@ import { CampaignNavCards } from "@uprise/field";
 import { DataTable } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 import { outerRing } from "@/lib/geometry";
+import { PageHeader } from "@/components/shell/page-header";
 
 // mapbox-gl in the boundary map — keep it out of SSR.
 const CampaignBoundaryMap = dynamic(
@@ -313,15 +314,11 @@ export default function CanvassPage() {
   if (campaigns.length === 0) {
     return (
       <div className="page-stack">
-        <div>
-          <div className="flex items-center gap-2">
-            <MapPin className="h-6 w-6 shrink-0 text-primary" />
-            <h1 className="text-2xl font-extrabold">Canvassing</h1>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Create a campaign to start cutting turf and assigning volunteers.
-          </p>
-        </div>
+        <PageHeader
+          icon={MapPin}
+          title="Canvassing"
+          description="Create a campaign to start cutting turf and assigning volunteers."
+        />
         <EmptyState
           title="No campaigns yet"
           description="A campaign holds your turf, walk lists and goals."
@@ -334,17 +331,12 @@ export default function CanvassPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <MapPin className="h-6 w-6 shrink-0 text-primary" />
-            <h1 className="text-2xl font-extrabold">Canvassing</h1>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Cut turf, build walk lists and track the doors.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        icon={MapPin}
+        title="Canvassing"
+        description="Cut turf, build walk lists and track the doors."
+        actions={
+          <>
           <CampaignSwitcher
             campaigns={campaigns}
             activeId={activeId}
@@ -378,8 +370,9 @@ export default function CanvassPage() {
               </Link>
             </Button>
           ) : null}
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {activeId ? <CampaignNavCards campaignId={activeId} id="tour-canvass-ops" /> : null}
 

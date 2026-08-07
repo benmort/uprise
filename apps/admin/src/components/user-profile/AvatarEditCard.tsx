@@ -8,6 +8,7 @@ import { Button } from "@uprise/ui";
 import { Skeleton } from "@uprise/ui";
 import { getCroppedImg } from "@/lib/crop-image";
 import { profile, type UserAvatarResponse } from "@uprise/api-client";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface AvatarEditCardProps {
   onClose: () => void;
@@ -29,6 +30,7 @@ export default function AvatarEditCard({ onClose, onSave, inModal = false }: Ava
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [avatars, setAvatars] = useState<UserAvatarResponse[]>([]);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [avatarsLoading, setAvatarsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectingId, setSelectingId] = useState<string | null>(null);
@@ -100,7 +102,6 @@ export default function AvatarEditCard({ onClose, onSave, inModal = false }: Ava
   };
 
   const handleDeleteAvatar = async (id: string) => {
-    if (!window.confirm("Delete this avatar?")) return;
     setDeletingId(id);
     setError(null);
     try {
@@ -120,6 +121,18 @@ export default function AvatarEditCard({ onClose, onSave, inModal = false }: Ava
 
   const content = (
     <div className="flex flex-col gap-6">
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        title="Delete this avatar?"
+        description="This removes the image from your avatar library."
+        confirmLabel="Delete avatar"
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={() => {
+          const id = confirmDeleteId;
+          setConfirmDeleteId(null);
+          if (id) void handleDeleteAvatar(id);
+        }}
+      />
       <div className="flex items-center justify-between">
         <h4 className="text-lg font-semibold text-gray-800 dark:text-white/90">Edit profile picture</h4>
         {!inModal && (
@@ -181,7 +194,7 @@ export default function AvatarEditCard({ onClose, onSave, inModal = false }: Ava
                           size="sm"
                           variant="destructive"
                           className="h-7 cursor-pointer px-2 text-xs"
-                          onClick={() => void handleDeleteAvatar(avatar.id)}
+                          onClick={() => setConfirmDeleteId(avatar.id)}
                           disabled={deletingId === avatar.id}
                         >
                           Delete

@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { TabNav, TabNavItem } from "@uprise/ui";
+import { RouteTabs } from "@/components/ui/route-tabs";
 
 /**
  * The segmented tab bar across the top of every /data explorer.
@@ -52,15 +51,5 @@ export function DataExplorerTabs({
   active: DataTab;
   hrefFor?: (tab: DataTab, href: string) => string;
 }) {
-  return (
-    <TabNav>
-      {TABS.map((t) => (
-        <TabNavItem key={t.key} active={active === t.key} asChild>
-          <Link href={hrefFor ? hrefFor(t.key, t.href) : t.href} scroll={false}>
-            {t.label}
-          </Link>
-        </TabNavItem>
-      ))}
-    </TabNav>
-  );
+  return <RouteTabs tabs={TABS} active={active} hrefFor={hrefFor} scroll={false} />;
 }

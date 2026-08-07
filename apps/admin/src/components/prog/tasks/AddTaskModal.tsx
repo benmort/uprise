@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalContent } from "@uprise/ui";
+import { cn } from "@/lib/utils";
 import { Plus, X } from 'lucide-react';
 
 interface AddTaskModalProps {
@@ -98,7 +99,8 @@ export default function AddTaskModal({ isOpen, onClose, onCreateTask }: AddTaskM
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} className="max-w-[700px] m-4">
+    <Modal open={isOpen} onOpenChange={(o) => { if (!o) handleClose(); }}>
+      <ModalContent className={cn("p-0", "max-w-[700px] m-4", "bg-surface")}>
       <div className="no-scrollbar relative w-full overflow-y-auto rounded-3xl bg-white p-6 dark:bg-gray-900 lg:p-11">
         <div className="px-2">
           <h4 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90">
@@ -312,6 +314,7 @@ export default function AddTaskModal({ isOpen, onClose, onCreateTask }: AddTaskM
           </div>
         </form>
       </div>
+    </ModalContent>
     </Modal>
   );
 }

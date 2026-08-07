@@ -36,7 +36,8 @@
     ".next/types/**/*.ts",
     ".next-validate/types/**/*.ts",
     ".next-validate-2/types/**/*.ts",
-    ".next-chipcheck/types/**/*.ts"
+    ".next-chipcheck/types/**/*.ts",
+    ".next-proto/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

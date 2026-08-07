@@ -28,19 +28,19 @@ The set specified by the design originator, and where each lives.
 | Avatar | `Avatar` (+ `computeInitials`), `TenantAvatar` | `avatar.tsx`, `tenant-brand.tsx` |
 | Badge | `Badge` (generic) · `StatusBadge`/`EventStatusBadge`/`TagChip` (domain) | `badge.tsx`, `status-badge.tsx`, … |
 | Breadcrumb | `Breadcrumb`/`BreadcrumbList`/`BreadcrumbItem`/`BreadcrumbLink`/`BreadcrumbPage`/`BreadcrumbSeparator` | `breadcrumb.tsx` |
-| Buttons | `Button` (`buttonVariants`) | `button.tsx` |
+| Buttons | `Button` (`buttonVariants`) · `CopyButton` (clipboard + ✓ state) · `RefreshButton` (spinning refresh) | `button.tsx`, `copy-button.tsx`, `refresh-button.tsx` |
 | Button Group | `ButtonGroup` | `button-group.tsx` |
-| Cards | `Card`/`CardHeader`/`CardTitle`/`CardContent`/`CardFooter` | `card.tsx` |
+| Cards | `Card`/`CardHeader`/`CardTitle`/`CardContent`/`CardFooter` (compositional) · `SectionCard` (titled surface + action slot) | `card.tsx`, `section-card.tsx` |
 | Carousel | `Carousel`/`CarouselItem` | `carousel.tsx` |
 | Dropdowns | `Dropdown`/`DropdownItem` · `Select`/`SelectItem` | `dropdown.tsx`, `select.tsx` |
 | Images | `Image` (`imageVariants`) | `image.tsx` |
 | Links | `Link` (`linkVariants`, `asChild`) | `link.tsx` |
-| List | `List`/`ListItem` | `list.tsx` |
+| List | `List`/`ListItem` · `EntityRow` (icon · title/meta · trailing, `asChild`) · `ListFooter` ("Showing X of Y" + pager) | `list.tsx`, `entity-row.tsx`, `list-footer.tsx` |
 | Modals | `Modal`* (base) · `FormDialog` (create/edit) · `ConfirmDialog` (destructive) | `modal.tsx`, `form-dialog.tsx`, `confirm-dialog.tsx` |
 | Notification | `ToastProvider`/`useToast` (toasts) · `Alert dismissible` (inline banner) | `toast.tsx`, `alert.tsx` |
 | Pagination | `Pagination` (numbered) · `PaginationControls` (cursor + rows-per-page) | `pagination.tsx`, `pagination-controls.tsx` |
 | Popovers | `Popover`/`PopoverTrigger`/`PopoverContent`/`PopoverAnchor`/`PopoverClose` | `popover.tsx` |
-| Progressbar | `Progress` (generic) · `StepProgress` (wizard) · `CapacityMeter` (gauge) | `progress.tsx`, … |
+| Progressbar | `Progress` (generic) · `ProgressBar` (label row + tone palette) · `StepProgress` (wizard) · `CapacityMeter` (gauge) | `progress.tsx`, `progress-bar.tsx`, … |
 | Ribbons | `Ribbon` | `ribbon.tsx` |
 | Spinners | `Spinner`/`PageSpinner` · `BrandLoadingScreen` | `spinner.tsx`, `brand-loading-screen.tsx` |
 | Tabs | `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` (panels) · `TabNav`/`TabNavItem` (route bars) | `tabs.tsx` |
@@ -48,6 +48,16 @@ The set specified by the design originator, and where each lives.
 
 Also promoted into the shared kit: **`Switch`** (`switch.tsx`) and the **`Table`** family
 (`Table`/`TableHeader`/`TableBody`/`TableRow`/`TableHead`/`TableCell`/`TableCaption`, `table.tsx`).
+Settings/typography helpers: **`ToggleRow`** (`toggle-row.tsx` — label + Switch row, the
+`aria-label` forwards verbatim to the Switch), **`MicroLabel`** (`micro-label.tsx` — the
+canonical `0.06em`-tracked eyebrow/table-head treatment), and the
+**`useCopyToClipboard`** hook (`hooks/use-copy-to-clipboard.ts`).
+
+Data display, promoted from `@uprise/field` (which re-exports them): **`DataTable`**
+(`data-table.tsx` — the config-driven default table: columns/rows/rowKey, built-in
+pagination, `loading` skeletons, `rowClassName`; built ON the `Table*` primitives, which
+remain the escape hatch for irregular layouts), **`SectionCard`**, **`KpiTile`**
+(`kpi-tile.tsx`, `size` sm/md/lg), **`ProgressBar`**.
 
 \* `Modal` is the bare Radix-Dialog base; prefer `FormDialog`/`ConfirmDialog` for those jobs.
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CheckCircle2, PartyPopper, Rocket, Unlock } from "lucide-react";
 import { Button, EmptyState, StepProgress } from "@uprise/ui";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PageHeader } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/shell/page-header";
 import { StateRegion } from "@/components/shell/state-region";
 import { TelephonyStatusCard } from "@/components/telephony/telephony-status-card";
 import { EmailSetupCard } from "@/components/email/email-setup-card";

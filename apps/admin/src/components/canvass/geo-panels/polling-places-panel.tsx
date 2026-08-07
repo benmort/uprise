@@ -19,6 +19,7 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { cn } from "@/lib/utils";
 import { AutoAccordionGroup, CollapsibleCard } from "./collapsible-card";
 import { type WalkMode } from "@uprise/field";
+import { DataTable } from "@uprise/ui";
 
 /** Jurisdiction filter pills — "all" plus federal and each state/territory. The dot
  *  colour matches the map's booth palette (see turf-draw-map.tsx). */
@@ -120,7 +121,7 @@ export function PollingPlacesPanel({ view }: { view: WalkMode }) {
       <label className="flex items-center gap-2 text-sm text-muted-foreground">
         <input
           type="checkbox"
-          className="h-4 w-4 rounded border-border accent-[hsl(var(--primary))]"
+          className="h-4 w-4 rounded border-border accent-primary"
           checked={scopeToMap}
           onChange={(e) => setScopeToMap(e.target.checked)}
         />
@@ -246,49 +247,39 @@ export function PollingPlacesPanel({ view }: { view: WalkMode }) {
       >
         <Card>
           <CardContent className="space-y-4 pt-6">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
-                    <th className="py-2 pr-4">Booth</th>
-                    <th className="py-2 pr-4">Electorate</th>
-                    <th className="py-2 pr-4">Suburb</th>
-                    <th className="py-2 pr-4">State</th>
-                    <th className="py-2 pr-4">Jurisdiction</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr
-                      key={r.id}
-                      className={cn(
-                        "group cursor-pointer border-b border-border/60 hover:bg-primary-container/10",
-                        pollingSelectedId === r.id && "bg-primary-container/20",
-                      )}
-                      onClick={() => select(r.id)}
-                    >
-                      <td className="py-3 pr-4">
-                        <span className="font-medium text-foreground">{r.name ?? r.premises ?? r.id}</span>
-                        {r.premises && r.name ? <p className="text-xs text-muted-foreground">{r.premises}</p> : null}
-                      </td>
-                      <td className="py-3 pr-4 text-muted-foreground">{r.divisionName ?? "–"}</td>
-                      <td className="py-3 pr-4 text-muted-foreground">{r.suburb ?? "–"}</td>
-                      <td className="py-3 pr-4 text-muted-foreground">{r.state ?? "–"}</td>
-                      <td className="py-3 pr-4 text-muted-foreground">
-                        {r.jurisdiction === "federal" ? "Federal" : r.jurisdiction.toUpperCase()}
-                      </td>
-                    </tr>
-                  ))}
-                  {rows.length === 0 && !list.loading ? (
-                    <tr>
-                      <td colSpan={5} className="py-6 text-center text-muted-foreground">
-                        No polling places{q ? ` match “${q.trim()}”` : ""}.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              aria-label="Polling places"
+              rows={rows}
+              rowKey={(r) => r.id}
+              pageSize={0}
+              onRowClick={(r) => select(r.id)}
+              rowClassName={(r) => (pollingSelectedId === r.id ? "bg-primary-container/20" : undefined)}
+              empty={`No polling places${q ? ` match “${q.trim()}”` : ""}.`}
+              columns={[
+                {
+                  key: "booth",
+                  header: "Booth",
+                  cell: (r) => (
+                    <div>
+                      <span className="font-medium text-foreground">{r.name ?? r.premises ?? r.id}</span>
+                      {r.premises && r.name ? <p className="text-xs text-muted-foreground">{r.premises}</p> : null}
+                    </div>
+                  ),
+                },
+                { key: "electorate", header: "Electorate", cell: (r) => <span className="text-muted-foreground">{r.divisionName ?? "–"}</span> },
+                { key: "suburb", header: "Suburb", cell: (r) => <span className="text-muted-foreground">{r.suburb ?? "–"}</span> },
+                { key: "state", header: "State", cell: (r) => <span className="text-muted-foreground">{r.state ?? "–"}</span> },
+                {
+                  key: "jurisdiction",
+                  header: "Jurisdiction",
+                  cell: (r) => (
+                    <span className="text-muted-foreground">
+                      {r.jurisdiction === "federal" ? "Federal" : r.jurisdiction.toUpperCase()}
+                    </span>
+                  ),
+                },
+              ]}
+            />
             {pagination}
           </CardContent>
         </Card>

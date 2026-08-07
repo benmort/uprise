@@ -16,6 +16,8 @@ import { cn } from '@/lib/utils';
 import { CreateTenantDialog } from '@/components/topbar/create-tenant-dialog';
 import { TenantStatusPill } from '@/components/super/tenant-switcher';
 import { SignupsPanel } from '@/components/super/signups-panel';
+import { SuperPageHeader } from "@/components/super/super-page-header";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 /** A unified row for the list — sourced from the all-tenants search (super-admin)
  * or the caller's own memberships (customer owner). */
@@ -49,6 +51,7 @@ export default function TenantsPage() {
     typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("plan") ?? "",
   );
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<TenantRow | null>(null);
   const [query, setQuery] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
@@ -142,8 +145,7 @@ export default function TenantsPage() {
   };
 
   const remove = async (row: TenantRow) => {
-    if (pending) return;
-    if (!window.confirm(`Delete tenant "${row.name}"? This soft-deletes it and its access.`)) return;
+    setConfirmDelete(null);
     setPending(`delete:${row.id}`);
     const res = await tenantsApi.remove(row.id);
     setPending(null);
@@ -169,23 +171,18 @@ export default function TenantsPage() {
 
   return (
     <section className="page-stack">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 shrink-0 text-primary" />
-            <h1 className="text-2xl font-extrabold">Tenants</h1>
-          </div>
-          <p className="text-gray-600 dark:text-gray-400">
-            Manage every tenant on the platform.
-          </p>
-        </div>
-        {canCreate ? (
-          <Button onClick={() => setCreateOpen(true)} disabled={!!pending}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Tenant
-          </Button>
-        ) : null}
-      </div>
+      <SuperPageHeader
+        title="Tenants"
+        description="Manage every tenant on the platform."
+        actions={
+          canCreate ? (
+            <Button onClick={() => setCreateOpen(true)} disabled={!!pending}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Tenant
+            </Button>
+          ) : null
+        }
+      />
 
       {/* Tenants | Signups tabs — the signups queue folds in here (super-admin only). */}
       {isSuperAdmin ? (
@@ -350,7 +347,7 @@ export default function TenantsPage() {
                           variant="outline"
                           size="sm"
                           disabled={!!pending}
-                          onClick={() => void remove(t)}
+                          onClick={() => setConfirmDelete(t)}
                           className="text-red-600 dark:text-red-400"
                         >
                           {pending === `delete:${t.id}` ? (
@@ -371,6 +368,17 @@ export default function TenantsPage() {
       )}
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title="Delete tenant?"
+        description={`Delete tenant "${confirmDelete?.name ?? ""}"? This soft-deletes it and its access.`}
+        confirmLabel="Delete tenant"
+        busy={!!pending && pending.startsWith("delete:")}
+        busyLabel="Deleting…"
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => confirmDelete && void remove(confirmDelete)}
+      />
 
       <CreateTenantDialog
         open={createOpen}

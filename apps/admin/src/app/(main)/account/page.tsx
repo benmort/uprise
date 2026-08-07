@@ -21,12 +21,14 @@ import {
   Spinner,
   Switch,
   formatPhoneDisplay,
+  useResendCooldown,
 } from "@uprise/ui";
 import { auth, profile, sessions as sessionsApi, type SessionSummaryResponse } from "@uprise/api-client";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { OriginBackLink, useDeepLinkPulse } from "@/components/setup/origin-deep-link";
 import { getSession, logout } from "@/lib/session";
+import { PageHeader } from "@/components/shell/page-header";
 
 type Flags = {
   email: string | null;
@@ -57,7 +59,12 @@ export default function AccountPage() {
     }
     setFlags({
       email: session.email ?? null,
-      mobile: prof.ok ? prof.data.phone : null,
+      // Two different numbers live on a user: `phone` is free text typed into the profile,
+      // `mobile` is the number verified through OTP. Most people only ever have the second, so
+      // reading `phone` alone showed them "Verified" and "No mobile on file." at the same time —
+      // and after verifying, the card reset to an empty form as though nothing had happened.
+      // Same fallback the blast composer's proof field already uses.
+      mobile: prof.ok ? (prof.data.phone?.trim() || prof.data.mobile?.trim() || null) : null,
       role: session.role ?? "",
       emailVerified: Boolean(session.emailVerified),
       mobileVerified: Boolean(session.mobileVerified),
@@ -100,10 +107,7 @@ export default function AccountPage() {
   return (
     <div className="page-stack">
       <OriginBackLink />
-      <div>
-        <h1 className="text-3xl font-semibold">Account</h1>
-        <p className="text-sm text-muted-foreground">Sign-in, security and account controls.</p>
-      </div>
+      <PageHeader title="Account" description="Sign-in, security and account controls." />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <EmailCard email={flags.email} verified={flags.emailVerified} onRefresh={() => void load()} />
@@ -342,6 +346,10 @@ export default function AccountPage() {
     const [changing, setChanging] = useState(false);
     const [newMobile, setNewMobile] = useState("");
 
+    // Every press sends a real SMS, so the button has to say "not yet" rather than quietly fire
+    // again — the same 30s cooldown people already meet on the sign-in 2FA screen.
+    const cooldown = useResendCooldown(30);
+
     // `number` set ⇒ save it first (a new/changed number); omitted ⇒ (re)send to the number on file.
     const send = async (number?: string) => {
       setBusy("send");
@@ -355,11 +363,16 @@ export default function AccountPage() {
       const res = await profile.sendMobileCode();
       setBusy(null);
       if (res.ok) {
+        cooldown.start();
         setSent(true);
         setSentTo(number ?? mobile);
         setChanging(false);
         notifyOk("Verification code sent");
-      } else notifyErr("Couldn't send code", res.error);
+      } else {
+        // A failed send costs no message, so it must not cost the user a wait.
+        cooldown.reset();
+        notifyErr("Couldn't send code", res.error);
+      }
     };
     const confirm = async () => {
       setBusy("confirm");
@@ -417,13 +430,21 @@ export default function AccountPage() {
               <Button onClick={() => void confirm()} disabled={busy !== null || code.length < 4}>
                 {busy === "confirm" ? (<><Spinner className="mr-2" />Verifying…</>) : "Verify"}
               </Button>
-              <Button variant="ghost" onClick={() => void send()} disabled={busy !== null}>
-                {busy === "send" ? (<><Spinner className="mr-2" />Sending…</>) : "Resend"}
+              <Button
+                variant="ghost"
+                onClick={() => void send()}
+                disabled={busy !== null || cooldown.waiting}
+              >
+                {busy === "send" ? (<><Spinner className="mr-2" />Sending…</>) : cooldown.label()}
               </Button>
             </div>
           ) : !verified && mobile ? (
-            <Button onClick={() => void send()} disabled={busy !== null}>
-              {busy === "send" ? (<><Spinner className="mr-2" />Sending…</>) : "Send verification code"}
+            <Button onClick={() => void send()} disabled={busy !== null || cooldown.waiting}>
+              {busy === "send" ? (
+                <><Spinner className="mr-2" />Sending…</>
+              ) : (
+                cooldown.label("Send verification code")
+              )}
             </Button>
           ) : !mobile ? (
             // First-time entry — nothing on file yet.
@@ -431,8 +452,15 @@ export default function AccountPage() {
               <Field label="Mobile number" htmlFor="mobile">
                 <PhoneInput id="mobile" value={newMobile} onChange={setNewMobile} />
               </Field>
-              <Button onClick={() => void send(newMobile.trim())} disabled={busy !== null || !newMobile.trim()}>
-                {busy === "send" ? (<><Spinner className="mr-2" />Sending…</>) : "Send code"}
+              <Button
+                onClick={() => void send(newMobile.trim())}
+                disabled={busy !== null || !newMobile.trim() || cooldown.waiting}
+              >
+                {busy === "send" ? (
+                  <><Spinner className="mr-2" />Sending…</>
+                ) : (
+                  cooldown.label("Send code")
+                )}
               </Button>
             </div>
           ) : null}

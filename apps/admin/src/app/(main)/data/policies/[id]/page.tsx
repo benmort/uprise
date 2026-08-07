@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@uprise/field";
 import { DataTable } from "@uprise/field";
 import { MemberAvatar } from "@/components/civic/member-avatar";
+import { MicroLabel } from "@uprise/ui";
 
 /** They Vote For You agreement buckets → plain language (mirrors the politician page). */
 const CATEGORY_LABEL: Record<string, string> = {
@@ -42,7 +43,7 @@ type Position = {
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
+      <MicroLabel as="div">{label}</MicroLabel>
       <div className="mt-0.5 text-lg font-semibold text-foreground">{value}</div>
     </div>
   );

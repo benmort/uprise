@@ -29,7 +29,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
-import { Spinner } from "@uprise/ui";
+import { Spinner, DataTable } from "@uprise/ui";
 import { type WalkMode } from "@uprise/field";
 import { AutoAccordionGroup, CollapsibleCard } from "./collapsible-card";
 
@@ -392,95 +392,78 @@ export function AreasPanel({ view }: { view: WalkMode }) {
       ) : (
         <Card>
           <CardContent className="space-y-4 pt-6">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
-                    <th className="py-2 pr-4">Area</th>
-                    <th className="py-2 pr-4">State</th>
-                    <th className="py-2 pr-4">Addresses</th>
-                    <th className="py-2 pr-4">Quick Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {searching
-                    ? Array.from({ length: pageSize }).map((_, index) => (
-                        <tr key={`area-skeleton-${index}`} className="border-b border-border/60">
-                          <td className="py-3 pr-4"><Skeleton className="h-4 w-44" /></td>
-                          <td className="py-3 pr-4"><Skeleton className="h-4 w-12" /></td>
-                          <td className="py-3 pr-4"><Skeleton className="h-4 w-16" /></td>
-                          <td className="py-3 pr-4"><Skeleton className="h-4 w-24" /></td>
-                        </tr>
-                      ))
-                    : hits.map((h) => (
-                        <tr
-                          key={`${h.level}:${h.code}`}
-                          className="group cursor-pointer border-b border-border/60 hover:bg-primary-container/10"
-                          onClick={() => router.push(`/data/areas/${level}/${encodeURIComponent(h.code)}`)}
-                        >
-                          <td className="py-3 pr-4">
-                            <Link
-                              href={`/data/areas/${level}/${encodeURIComponent(h.code)}`}
-                              className="font-medium text-primary hover:underline"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              {h.name}
-                            </Link>
-                            <p className="text-xs text-muted-foreground tabular-nums">{h.code}</p>
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">{DIGIT_TO_STATE[h.code[0]] ?? "—"}</td>
-                          <td className="py-3 pr-4 tabular-nums">{h.addressCount.toLocaleString()}</td>
-                          <td className="py-3 pr-4">
-                            <div className="flex items-center gap-2 opacity-60 transition group-hover:opacity-100">
-                              {(() => {
-                                const cov = basketHasArea(level, h.code) ? null : coveredBy({ kind: "area", level, code: h.code });
-                                return (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    disabled={!!cov}
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      basketToggleArea({ level, code: h.code, name: h.name });
-                                    }}
-                                  >
-                                    {cov ? (
-                                      <><Check className="mr-1.5 h-3.5 w-3.5" />In {cov}</>
-                                    ) : basketHasArea(level, h.code) ? (
-                                      <><Check className="mr-1.5 h-3.5 w-3.5" />Added</>
-                                    ) : (
-                                      <><Plus className="mr-1.5 h-3.5 w-3.5" />My turf</>
-                                    )}
-                                  </Button>
-                                );
-                              })()}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={busy === h.code}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void cutFromArea(h);
-                                }}
-                              >
-                                <Scissors className="mr-1.5 h-3.5 w-3.5" />
-                                {busy === h.code ? (<><Spinner className="mr-2" />Cutting…</>) : "Cut turf"}
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                  {!searching && hits.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="py-6 text-center text-muted-foreground">
-                        No {level.toUpperCase()} areas{effectiveQ ? ` match “${effectiveQ}”` : ""}
-                        {state ? ` in ${state}` : ""}.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              aria-label="Areas"
+              rows={hits}
+              rowKey={(h) => `${h.level}:${h.code}`}
+              pageSize={0}
+              loading={searching}
+              skeletonRows={pageSize}
+              onRowClick={(h) => router.push(`/data/areas/${level}/${encodeURIComponent(h.code)}`)}
+              empty={`No ${level.toUpperCase()} areas${effectiveQ ? ` match “${effectiveQ}”` : ""}${state ? ` in ${state}` : ""}.`}
+              columns={[
+                {
+                  key: "area",
+                  header: "Area",
+                  cell: (h) => (
+                    <div>
+                      <Link
+                        href={`/data/areas/${level}/${encodeURIComponent(h.code)}`}
+                        className="font-medium text-primary hover:underline"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {h.name}
+                      </Link>
+                      <p className="text-xs text-muted-foreground tabular-nums">{h.code}</p>
+                    </div>
+                  ),
+                },
+                { key: "state", header: "State", cell: (h) => <span className="text-muted-foreground">{DIGIT_TO_STATE[h.code[0]] ?? "—"}</span> },
+                { key: "addresses", header: "Addresses", cell: (h) => <span className="tabular-nums">{h.addressCount.toLocaleString()}</span> },
+                {
+                  key: "actions",
+                  header: "Quick Actions",
+                  cell: (h) => (
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        const cov = basketHasArea(level, h.code) ? null : coveredBy({ kind: "area", level, code: h.code });
+                        return (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={!!cov}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              basketToggleArea({ level, code: h.code, name: h.name });
+                            }}
+                          >
+                            {cov ? (
+                              <><Check className="mr-1.5 h-3.5 w-3.5" />In {cov}</>
+                            ) : basketHasArea(level, h.code) ? (
+                              <><Check className="mr-1.5 h-3.5 w-3.5" />Added</>
+                            ) : (
+                              <><Plus className="mr-1.5 h-3.5 w-3.5" />My turf</>
+                            )}
+                          </Button>
+                        );
+                      })()}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy === h.code}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void cutFromArea(h);
+                        }}
+                      >
+                        <Scissors className="mr-1.5 h-3.5 w-3.5" />
+                        {busy === h.code ? (<><Spinner className="mr-2" />Cutting…</>) : "Cut turf"}
+                      </Button>
+                    </div>
+                  ),
+                },
+              ]}
+            />
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">
                 Showing {hits.length ? page * pageSize + 1 : 0}–{page * pageSize + hits.length} of{" "}

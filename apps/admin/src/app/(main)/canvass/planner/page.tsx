@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import {
   SectionCard,
   KpiTile,
+  DataTable,
   buildTurf,
   DENSITY_PRESETS,
   estimateTurf,
@@ -24,9 +25,9 @@ const REF_ADDRESSES = 200;
 const REF_EFFECTIVE = 0.69;
 
 const PACE_STYLES: Record<Pace, string> = {
-  fast: "bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]",
+  fast: "bg-success/10 text-success",
   steady: "bg-surface-variant text-muted-foreground",
-  slow: "bg-[hsl(var(--warning-foreground))]/10 text-[hsl(var(--warning-foreground))]",
+  slow: "bg-warning-foreground/10 text-warning-foreground",
 };
 const PACE_LABEL: Record<Pace, string> = { fast: "Fast", steady: "Steady", slow: "Slow going" };
 
@@ -88,7 +89,7 @@ export default function TurfPlannerPage() {
     const e = estimateTurf(t.buildings, t.walkSeconds);
     return [
       { label: "At the door — knock, log, talk", seconds: e.doorSeconds / e.doors, bar: "bg-primary" },
-      { label: "Front path & back", seconds: e.approachWalkSeconds / e.doors, bar: "bg-[hsl(var(--success))]" },
+      { label: "Front path & back", seconds: e.approachWalkSeconds / e.doors, bar: "bg-success" },
       { label: "Walk to the next building", seconds: e.walkSeconds / e.doors, bar: "bg-foreground/30" },
     ];
   }, []);
@@ -234,39 +235,31 @@ export default function TurfPlannerPage() {
 
       {/* ── Density reference ── */}
       <SectionCard title="Density reference" description="A four-hour shift, same model." bodyClassName="p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              <tr className="border-b border-border text-[11px] uppercase tracking-[0.04em] text-muted-foreground">
-                <th className="px-5 py-3 text-left font-semibold">Setting</th>
-                <th className="px-5 py-3 text-right font-semibold">Doors / bldg</th>
-                <th className="px-5 py-3 text-right font-semibold">Rate</th>
-                <th className="px-5 py-3 text-right font-semibold">Ceiling / 4h</th>
-                <th className="px-5 py-3 text-right font-semibold">Realistic / 4h</th>
-                <th className="px-5 py-3 text-right font-semibold">Turf / shift</th>
-                <th className="px-5 py-3 text-right font-semibold">Pace</th>
-              </tr>
-            </thead>
-            <tbody className="tabular-nums">
-              {reference.map((r) => (
-                <tr key={r.d.id} className="border-b border-border last:border-0 hover:bg-surface-variant/40">
-                  <td className="px-5 py-3">
-                    <span className="font-semibold text-foreground">{r.d.label}</span>
-                    <span className="block text-[11px] font-normal text-muted-foreground">
-                      {r.d.gapMetres} m gap · {r.d.hint}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-right text-muted-foreground">{r.d.doorsPerBuilding}</td>
-                  <td className="px-5 py-3 text-right text-muted-foreground">{r.rate.toFixed(1)} /hr</td>
-                  <td className="px-5 py-3 text-right text-muted-foreground">{r.ceiling}</td>
-                  <td className="px-5 py-3 text-right font-bold text-primary">{r.realistic}</td>
-                  <td className="px-5 py-3 text-right text-muted-foreground">~{r.realistic} addrs</td>
-                  <td className="px-5 py-3 text-right"><PaceBadge pace={r.pace} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          aria-label="Density reference"
+          rows={reference}
+          rowKey={(r) => r.d.id}
+          columns={[
+            {
+              key: "setting",
+              header: "Setting",
+              cell: (r) => (
+                <div>
+                  <span className="font-semibold text-foreground">{r.d.label}</span>
+                  <span className="block text-[11px] font-normal text-muted-foreground">
+                    {r.d.gapMetres} m gap · {r.d.hint}
+                  </span>
+                </div>
+              ),
+            },
+            { key: "doors", header: "Doors / bldg", numeric: true, cell: (r) => <span className="tabular-nums text-muted-foreground">{r.d.doorsPerBuilding}</span> },
+            { key: "rate", header: "Rate", numeric: true, cell: (r) => <span className="tabular-nums text-muted-foreground">{r.rate.toFixed(1)} /hr</span> },
+            { key: "ceiling", header: "Ceiling / 4h", numeric: true, cell: (r) => <span className="tabular-nums text-muted-foreground">{r.ceiling}</span> },
+            { key: "realistic", header: "Realistic / 4h", numeric: true, cell: (r) => <span className="font-bold tabular-nums text-primary">{r.realistic}</span> },
+            { key: "turf", header: "Turf / shift", numeric: true, cell: (r) => <span className="tabular-nums text-muted-foreground">~{r.realistic} addrs</span> },
+            { key: "pace", header: "Pace", numeric: true, cell: (r) => <PaceBadge pace={r.pace} /> },
+          ]}
+        />
       </SectionCard>
 
       <p className="max-w-[70ch] text-sm text-muted-foreground">

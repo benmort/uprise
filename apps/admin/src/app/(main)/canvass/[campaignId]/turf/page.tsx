@@ -187,8 +187,11 @@ export default function TurfCuttingPage() {
   const heatCells = heatData?.cells;
   // The run isn't ready when it's still loading, the server returned a queued/stale run, or a
   // large boundary 202'd (HEAT_QUEUED) — surface a "computing" state (not an error) and poll.
-  const heatQueued = heatData?.meta.queued === true || /being computed in the background/i.test(heat.error ?? "");
-  const heatReady = Boolean(heatData && heatData.cells.length > 0 && !heatData.meta.queued);
+  // `meta?` not `meta.` — belt and braces. The optional chain on `heatData` only guards a null
+  // response, not a response missing `meta`, and a payload the client couldn't shape should
+  // degrade to "not ready" rather than take the whole page down through the error boundary.
+  const heatQueued = heatData?.meta?.queued === true || /being computed in the background/i.test(heat.error ?? "");
+  const heatReady = Boolean(heatData?.cells?.length && !heatData.meta?.queued);
   const heatComputing = Boolean(targeting && campaignBoundary) && !heatReady && (heat.loading || heatQueued);
   useEffect(() => {
     setHeatPollMs(heatComputing ? 4000 : false);
@@ -508,7 +511,10 @@ export default function TurfCuttingPage() {
             heatOverlay={heatOverlay}
             heatNoDataFilter={targeting && heatCells?.length ? heatNoDataFilter(heatCells) : undefined}
           />
-          {targeting && palette && heatData ? (
+          {/* `heatReady`, not just `heatData`: a legend for a map that hasn't rendered is wrong,
+              and gating on the presence of a response alone reached into `meta` on a payload that
+              might not have one. */}
+          {targeting && palette && heatReady && heatData?.meta?.breaks ? (
             <div className="pointer-events-none absolute bottom-3 left-3 z-10">
               <HeatLegend breaks={heatData.meta.breaks} ramp={palette.seq} nodata={palette.nodata} />
             </div>

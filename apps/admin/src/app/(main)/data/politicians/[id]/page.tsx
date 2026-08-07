@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@uprise/field";
 import { DataTable } from "@uprise/field";
 import { MemberAvatar } from "@/components/civic/member-avatar";
+import { MicroLabel } from "@uprise/ui";
 
 // mapbox-gl touches `window`, so the map is client-only (ssr:false) and lazy — it
 // never lands in the initial bundle for the (many) politicians with no linkable geo.
@@ -46,7 +47,7 @@ const LINKABLE_GEO = new Set(["ced", "sed_lower", "sed_upper"]);
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
+      <MicroLabel as="div">{label}</MicroLabel>
       <div className="mt-0.5 text-lg font-semibold text-foreground">{value}</div>
     </div>
   );

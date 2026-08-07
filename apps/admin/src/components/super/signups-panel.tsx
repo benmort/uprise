@@ -6,6 +6,7 @@ import { Building2, Check, X } from "lucide-react";
 import { Card, CardContent } from "@uprise/ui";
 import { Button } from "@uprise/ui";
 import { approveSignup, listPendingSignups, rejectSignup, type PendingSignup } from "@/lib/api";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 /**
  * The pending-signups queue, extracted from /super/signups so it can mount as the "Signups" tab
@@ -19,6 +20,7 @@ export function SignupsPanel({ onCount }: { onCount?: (n: number) => void }) {
   const [rows, setRows] = useState<PendingSignup[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
+  const [confirmReject, setConfirmReject] = useState<PendingSignup | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -54,7 +56,6 @@ export function SignupsPanel({ onCount }: { onCount?: (n: number) => void }) {
 
   const reject = async (row: PendingSignup) => {
     if (pending) return;
-    if (!window.confirm(`Reject "${row.orgName}"? This soft-deletes the tenant and frees its URL.`)) return;
     setPending(`reject:${row.requestId}`);
     const res = await rejectSignup(row.requestId);
     setPending(null);
@@ -134,7 +135,7 @@ export function SignupsPanel({ onCount }: { onCount?: (n: number) => void }) {
                 variant="outline"
                 size="sm"
                 disabled={!!pending}
-                onClick={() => void reject(r)}
+                onClick={() => setConfirmReject(r)}
                 className="text-red-600 dark:text-red-400"
               >
                 {pending === `reject:${r.requestId}` ? (
@@ -148,6 +149,18 @@ export function SignupsPanel({ onCount }: { onCount?: (n: number) => void }) {
           </CardContent>
         </Card>
       ))}
+      <ConfirmDialog
+        open={confirmReject !== null}
+        title="Reject this signup?"
+        description={`Reject "${confirmReject?.orgName ?? ""}"? This soft-deletes the tenant and frees its URL.`}
+        confirmLabel="Reject signup"
+        onCancel={() => setConfirmReject(null)}
+        onConfirm={() => {
+          const r = confirmReject;
+          setConfirmReject(null);
+          if (r) void reject(r);
+        }}
+      />
     </div>
   );
 }

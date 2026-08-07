@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, DoorClosed, Scissors, Users } from "lucide-react";
+import { DoorClosed, Scissors, Users } from "lucide-react";
 import { Spinner } from "@uprise/ui";
 import {
   createTurfFromDivision,
@@ -21,6 +20,7 @@ import { KpiTile } from "@uprise/field";
 import { RegionHierarchy } from "@/components/canvass/region-hierarchy";
 import { RegionPolling } from "@/components/canvass/region-polling";
 import { useToast } from "@/components/ui/toast";
+import { PageHeader } from "@/components/shell/page-header";
 
 const TurfMap = dynamic(() => import("@uprise/field").then((m) => m.TurfMap), {
   ssr: false,
@@ -72,32 +72,33 @@ export default function DivisionDetailPage() {
       >
         {d && (
           <div className="page-stack">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/data/divisions">
-                  <ArrowLeft className="mr-1 h-4 w-4" />
-                  Divisions
-                </Link>
-              </Button>
-              <h1 className="text-2xl font-extrabold">{d.name}</h1>
-              <span className="text-sm text-muted-foreground tabular-nums">{d.code}{d.state ? ` · ${d.state}` : ""}</span>
-              <div className="ml-auto flex items-center gap-2">
-                <select
-                  value={universe}
-                  onChange={(e) => setUniverse(e.target.value as TurfUniverse)}
-                  className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
-                  title="Which addresses land in the turf when you cut it"
-                >
-                  <option value="hybrid">Existing + cold doors</option>
-                  <option value="none">Cold doors only</option>
-                  <option value="existing">Existing contacts only</option>
-                </select>
-                <Button disabled={busy} onClick={cutTurf}>
-                  <Scissors className="mr-1.5 h-4 w-4" />
-                  {busy ? (<><Spinner className="mr-2" />Cutting…</>) : "Cut turf from division"}
-                </Button>
-              </div>
-            </div>
+            <PageHeader
+              title={d.name}
+              backHref="/data/divisions"
+              backLabel="Divisions"
+              breadcrumbs={[{ label: "Divisions", href: "/data/divisions" }, { label: d.name }]}
+              titleAccessory={
+                <span className="text-sm text-muted-foreground tabular-nums">{d.code}{d.state ? ` · ${d.state}` : ""}</span>
+              }
+              actions={
+                <>
+                  <select
+                    value={universe}
+                    onChange={(e) => setUniverse(e.target.value as TurfUniverse)}
+                    className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
+                    title="Which addresses land in the turf when you cut it"
+                  >
+                    <option value="hybrid">Existing + cold doors</option>
+                    <option value="none">Cold doors only</option>
+                    <option value="existing">Existing contacts only</option>
+                  </select>
+                  <Button disabled={busy} onClick={cutTurf}>
+                    <Scissors className="mr-1.5 h-4 w-4" />
+                    {busy ? (<><Spinner className="mr-2" />Cutting…</>) : "Cut turf from division"}
+                  </Button>
+                </>
+              }
+            />
 
             <div className="grid gap-3 sm:grid-cols-3">
               <KpiTile label="Addresses" value={d.addressCount.toLocaleString()} icon={<DoorClosed className="h-4 w-4" />} />

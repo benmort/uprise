@@ -351,6 +351,8 @@ function buildNav(
               // Durable errors + the live Railway stream + Vercel build output + queue job
               // detail, in one place. Counts alone (above) hid a real incident for months.
               { label: "Platform logs", href: "/super/logs", match: sp("logs") },
+              // Design prototype: what "Sync queued (job cmsi3zl3)" should have been.
+              { label: "Queue firehose", href: "/super/queue-firehose", match: sp("queue-firehose") },
               // Health + last deploy for every app, across Vercel and Railway. Lives here
               // rather than at the top level because the API gates it to super-admins — the
               // customer-facing view of the same health is /status on the marketing site.

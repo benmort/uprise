@@ -6,7 +6,7 @@ import { cn } from "../lib/utils";
 
 export type AlertVariant = "success" | "error" | "warning" | "info";
 
-export interface AlertProps {
+export interface AlertProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
   variant: AlertVariant;
   /** Optional heading. Omit for a single-line callout (title-less body). */
   title?: string;
@@ -98,18 +98,19 @@ export function Alert({
   dismissible = false,
   onDismiss,
   className,
+  ...rest
 }: AlertProps) {
   const { container, icon } = variantClasses[variant];
   const [dismissed, setDismissed] = React.useState(false);
   if (dismissed) return null;
 
   return (
-    <div role="alert" className={cn("rounded-xl border p-4", container, className)}>
+    <div role="alert" className={cn("rounded-xl border p-4", container, className)} {...rest}>
       <div className="flex items-start gap-3">
         {showIcon ? <div className={cn("-mt-0.5 shrink-0", icon)}>{icons[variant]}</div> : null}
         <div className="min-w-0 flex-1">
           {title ? (
-            <h4 className="mb-1 text-sm font-semibold text-gray-800 dark:text-white/90">{title}</h4>
+            <h4 className="mb-1 text-sm font-semibold text-foreground">{title}</h4>
           ) : null}
           {children ??
             (message != null && <p className="text-sm text-gray-500 dark:text-gray-400">{message}</p>)}
@@ -130,7 +131,7 @@ export function Alert({
               setDismissed(true);
               onDismiss?.();
             }}
-            className="-mr-1 -mt-1 shrink-0 rounded-lg p-1 text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white/90"
+            className="-mr-1 -mt-1 shrink-0 rounded-lg p-1 text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
           >
             <X className="h-4 w-4" />
           </button>

@@ -1,16 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, DoorClosed, Users } from "lucide-react";
+import { DoorClosed, Users } from "lucide-react";
 import { getFirstNations, type FirstNationsLevel } from "@/lib/api/geo";
 import { useApi } from "@/lib/use-api";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StateRegion } from "@/components/shell/state-region";
 import { KpiTile } from "@uprise/field";
 import { RegionHierarchy } from "@/components/canvass/region-hierarchy";
+import { PageHeader } from "@/components/shell/page-header";
 
 const TurfMap = dynamic(() => import("@uprise/field").then((m) => m.TurfMap), {
   ssr: false,
@@ -53,22 +52,23 @@ export default function FirstNationsDetailPage() {
       >
         {d && (
           <div className="page-stack">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/data/first-nations">
-                  <ArrowLeft className="mr-1 h-4 w-4" />
-                  First Nations
-                </Link>
-              </Button>
-              <h1 className="text-2xl font-extrabold">{d.name}</h1>
-              <span className="text-sm text-muted-foreground tabular-nums">
-                {d.code}
-                {d.state ? ` · ${d.state}` : ""}
-              </span>
-              <span className="rounded-full bg-surface-variant px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                {LEVEL_LABEL[level] ?? level}
-              </span>
-            </div>
+            <PageHeader
+              title={d.name}
+              backHref="/data/first-nations"
+              backLabel="First Nations"
+              breadcrumbs={[{ label: "First Nations", href: "/data/first-nations" }, { label: d.name }]}
+              titleAccessory={
+                <>
+                  <span className="text-sm text-muted-foreground tabular-nums">
+                    {d.code}
+                    {d.state ? ` · ${d.state}` : ""}
+                  </span>
+                  <span className="rounded-full bg-surface-variant px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                    {LEVEL_LABEL[level] ?? level}
+                  </span>
+                </>
+              }
+            />
 
             <div className="grid gap-3 sm:grid-cols-3">
               <KpiTile label="Addresses" value={d.addressCount.toLocaleString()} icon={<DoorClosed className="h-4 w-4" />} />

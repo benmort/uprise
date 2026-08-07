@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Spinner } from "@uprise/ui";
+import { Spinner, DataTable } from "@uprise/ui";
 import { type WalkMode } from "@uprise/field";
 import { AutoAccordionGroup, CollapsibleCard } from "./collapsible-card";
 
@@ -169,71 +169,64 @@ export function StatesPanel({ view }: { view: WalkMode }) {
       >
         <Card>
           <CardContent className="space-y-4 pt-6">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
-                    <th className="py-2 pr-4">State / Territory</th>
-                    <th className="py-2 pr-4">Addresses</th>
-                    <th className="py-2 pr-4">Quick Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((s) => (
-                    <tr key={s.code} className="border-b border-border/60 hover:bg-primary-container/10">
-                      <td className="py-3 pr-4">
-                        <button
-                          type="button"
-                          onClick={() => selectState(selectedCode === s.code ? "" : s.code)}
-                          className={cn(
-                            "font-medium text-primary hover:underline",
-                            selectedCode === s.code && "underline",
-                          )}
-                        >
-                          {s.name}
-                        </button>
-                      </td>
-                      <td className="py-3 pr-4 tabular-nums">{s.addressCount.toLocaleString()}</td>
-                      <td className="py-3 pr-4">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              hasDivision("ste", s.code)
-                                ? removeDivision("ste", s.code)
-                                : addDivision({ type: "ste", code: s.code, name: s.name })
-                            }
-                          >
-                            {hasDivision("ste", s.code) ? (
-                              <><Check className="mr-1.5 h-3.5 w-3.5" />Added</>
-                            ) : (
-                              <><Plus className="mr-1.5 h-3.5 w-3.5" />My turf</>
-                            )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={busy === s.code}
-                            onClick={() => void cutFromState(s)}
-                          >
-                            <Scissors className="mr-1.5 h-3.5 w-3.5" />
-                            {busy === s.code ? (<><Spinner className="mr-2" />Cutting…</>) : "Cut turf"}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={3} className="py-6 text-center text-muted-foreground">
-                        No states{q ? ` match “${q.trim()}”` : ""}.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              aria-label="States"
+              rows={filtered}
+              rowKey={(s) => s.code}
+              pageSize={0}
+              empty={`No states${q ? ` match “${q.trim()}”` : ""}.`}
+              columns={[
+                {
+                  key: "name",
+                  header: "State / Territory",
+                  cell: (s) => (
+                    <button
+                      type="button"
+                      onClick={() => selectState(selectedCode === s.code ? "" : s.code)}
+                      className={cn(
+                        "font-medium text-primary hover:underline",
+                        selectedCode === s.code && "underline",
+                      )}
+                    >
+                      {s.name}
+                    </button>
+                  ),
+                },
+                { key: "addresses", header: "Addresses", cell: (s) => <span className="tabular-nums">{s.addressCount.toLocaleString()}</span> },
+                {
+                  key: "actions",
+                  header: "Quick Actions",
+                  cell: (s) => (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          hasDivision("ste", s.code)
+                            ? removeDivision("ste", s.code)
+                            : addDivision({ type: "ste", code: s.code, name: s.name })
+                        }
+                      >
+                        {hasDivision("ste", s.code) ? (
+                          <><Check className="mr-1.5 h-3.5 w-3.5" />Added</>
+                        ) : (
+                          <><Plus className="mr-1.5 h-3.5 w-3.5" />My turf</>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy === s.code}
+                        onClick={() => void cutFromState(s)}
+                      >
+                        <Scissors className="mr-1.5 h-3.5 w-3.5" />
+                        {busy === s.code ? (<><Spinner className="mr-2" />Cutting…</>) : "Cut turf"}
+                      </Button>
+                    </div>
+                  ),
+                },
+              ]}
+            />
           </CardContent>
         </Card>
       </StateRegion>

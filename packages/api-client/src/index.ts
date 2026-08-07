@@ -204,6 +204,25 @@ export async function request<T>(
         (typeof err === "object" ? err?.message : err) || json?.message || `Request failed (${res.status})`;
       return { ok: false, error: String(message), status: res.status };
     }
+    // A 2xx carrying an ERROR envelope is still a failure. The API expresses "accepted, still
+    // computing" by throwing ApiHttpException(…, 202) — a success status with an `{error:{…}}`
+    // body — and the bare-payload fallback below then handed that envelope back AS the payload.
+    // Callers reading a field off it got `undefined.<field>` and took the page down with them
+    // (the targeting map's HEAT_QUEUED did exactly this). Arrays are excluded: a bare array
+    // response is a legitimate payload, not an envelope.
+    if (
+      json &&
+      typeof json === "object" &&
+      !Array.isArray(json) &&
+      "error" in json &&
+      !("data" in json)
+    ) {
+      const err = json.error;
+      const message =
+        (typeof err === "object" ? err?.message : err) || json.message || `Request failed (${res.status})`;
+      return { ok: false, error: String(message), status: res.status };
+    }
+    // No `data` key ⇒ the body IS the payload (endpoints that answer bare, e.g. arrays).
     const data = (json && typeof json === "object" && "data" in json ? json.data : json) as T;
     return { ok: true, data };
   } catch (error) {

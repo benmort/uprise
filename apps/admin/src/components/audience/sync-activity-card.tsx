@@ -20,7 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Switch } from "@uprise/ui";
+import { DataTable, RefreshButton, ToggleRow } from "@uprise/ui";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -131,34 +131,37 @@ export function SyncActivityCard({ connections }: { connections: IntegrationConn
       <CardContent className="space-y-4">
         {/* Master switch + stream toggles */}
         <div className="space-y-2 rounded-lg border border-border p-3">
-          <label className="flex items-center justify-between gap-3">
-            <span className="text-sm font-semibold">Push to NationBuilder</span>
-            <Switch
-              checked={settings.enabled}
-              disabled={savingStream === "enabled"}
-              onCheckedChange={(v) => void togglePush(Boolean(v))}
-              aria-label="Push to NationBuilder"
-            />
-          </label>
+          <ToggleRow
+            label={<span className="font-semibold">Push to NationBuilder</span>}
+            checked={settings.enabled}
+            busy={savingStream === "enabled"}
+            onCheckedChange={(v) => void togglePush(v)}
+            aria-label="Push to NationBuilder"
+          />
           <div className="grid gap-1.5 sm:grid-cols-2">
             {(Object.keys(STREAM_LABELS) as SyncStreamKey[]).map((key) => (
-              <label key={key} className="flex items-center justify-between gap-3 text-sm">
-                <span className={settings.enabled ? "" : "text-muted-foreground"}>{STREAM_LABELS[key]}</span>
-                <Switch
-                  checked={settings.streams[key]}
-                  disabled={!settings.enabled || savingStream === key}
-                  onCheckedChange={(v) => void toggleStream(key, Boolean(v))}
-                  aria-label={STREAM_LABELS[key]}
-                />
-              </label>
+              <ToggleRow
+                key={key}
+                label={<span className={settings.enabled ? "" : "text-muted-foreground"}>{STREAM_LABELS[key]}</span>}
+                checked={settings.streams[key]}
+                disabled={!settings.enabled}
+                busy={savingStream === key}
+                onCheckedChange={(v) => void toggleStream(key, v)}
+                aria-label={STREAM_LABELS[key]}
+              />
             ))}
-            <label className="flex items-center justify-between gap-3 text-sm">
-              <span className={settings.enabled ? "" : "text-muted-foreground"}>
-                Opt-outs <span className="text-xs text-muted-foreground">(always on)</span>
-              </span>
-              {/* A STOP must reach the org's CRM — shown checked and immovable. */}
-              <Switch checked disabled aria-label="Opt-outs (always on)" />
-            </label>
+            {/* A STOP must reach the org's CRM — shown checked and immovable. */}
+            <ToggleRow
+              label={
+                <span className={settings.enabled ? "" : "text-muted-foreground"}>
+                  Opt-outs <span className="text-xs text-muted-foreground">(always on)</span>
+                </span>
+              }
+              checked
+              disabled
+              onCheckedChange={() => {}}
+              aria-label="Opt-outs (always on)"
+            />
           </div>
           <p className="text-xs text-muted-foreground">
             Support levels are only ever sent for door-knocks where consent was recorded, and only while
@@ -184,9 +187,7 @@ export function SyncActivityCard({ connections }: { connections: IntegrationConn
               </SelectItem>
             ))}
           </Select>
-          <Button size="sm" variant="outline" onClick={() => void deliveries.refetch?.()} disabled={deliveries.loading}>
-            Refresh
-          </Button>
+          <RefreshButton onClick={() => void deliveries.refetch?.()} refreshing={deliveries.loading} />
         </div>
 
         {deliveries.loading && !deliveries.data ? (
@@ -202,46 +203,45 @@ export function SyncActivityCard({ connections }: { connections: IntegrationConn
             description="Once people in a synced audience are door-knocked, texted or opt out, each update to NationBuilder appears here."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
-                  <th className="py-2 pr-4">When</th>
-                  <th className="py-2 pr-4">What</th>
-                  <th className="py-2 pr-4">Status</th>
-                  <th className="py-2 pr-4">Why</th>
-                  <th className="py-2 pr-4" />
-                </tr>
-              </thead>
-              <tbody>
-                {deliveries.data!.rows.map((row) => (
-                  <tr key={row.id} className="border-b border-border/70">
-                    <td className="py-2 pr-4 text-muted-foreground">
-                      {new Date(row.createdAt).toLocaleString()}
-                    </td>
-                    <td className="py-2 pr-4">{summariseDelivery(row)}</td>
-                    <td className="py-2 pr-4">
-                      <StatusBadge status={deriveDeliveryBadge(row.status)} />
-                    </td>
-                    <td className="max-w-[320px] py-2 pr-4 text-xs text-muted-foreground">
-                      {describeDeliveryError(row)}
-                    </td>
-                    <td className="py-2 pr-4 text-right">
-                      {canRetryDelivery(row) && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={retrying === row.id}
-                          onClick={() => void retry(row)}
-                        >
-                          Retry
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div>
+            <DataTable
+              aria-label="Delivery log"
+              rows={deliveries.data!.rows}
+              rowKey={(row) => row.id}
+              pageSize={0}
+              columns={[
+                {
+                  key: "when",
+                  header: "When",
+                  cell: (row) => <span className="text-muted-foreground">{new Date(row.createdAt).toLocaleString()}</span>,
+                },
+                { key: "what", header: "What", cell: (row) => summariseDelivery(row) },
+                { key: "status", header: "Status", cell: (row) => <StatusBadge status={deriveDeliveryBadge(row.status)} /> },
+                {
+                  key: "why",
+                  header: "Why",
+                  cell: (row) => (
+                    <span className="block max-w-[320px] text-xs text-muted-foreground">{describeDeliveryError(row)}</span>
+                  ),
+                },
+                {
+                  key: "retry",
+                  header: "",
+                  numeric: true,
+                  cell: (row) =>
+                    canRetryDelivery(row) ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={retrying === row.id}
+                        onClick={() => void retry(row)}
+                      >
+                        Retry
+                      </Button>
+                    ) : null,
+                },
+              ]}
+            />
             <p className="pt-2 text-xs text-muted-foreground">
               Showing {deliveries.data!.rows.length} of {deliveries.data!.total.toLocaleString()}
             </p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Spinner } from "@uprise/ui";
+import { Spinner, DataTable, ListFooter } from "@uprise/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Eye, FileText, Database, Folder, FolderPlus, HardDrive, Image as ImageIcon, Music, Plus, Trash2, Video } from "lucide-react";
@@ -20,8 +20,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { useToast } from "@/components/ui/toast";
-import { PageHeader } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/shell/page-header";
 import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 /** Prog's file-manager chrome (media tiles / folder grid / storage donut /
  *  recent table), token-clean and wired to the real files API. */
@@ -179,6 +180,7 @@ export default function FileManagerPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<StoredFile | null>(null);
 
   async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -204,7 +206,6 @@ export default function FileManagerPage() {
 
   async function onRemove(file: StoredFile) {
     if (removing) return;
-    if (!window.confirm(`Delete “${file.name}”? This can't be undone.`)) return;
     setRemoving(file.id);
     const res = await deleteFile(file.id);
     setRemoving(null);
@@ -499,79 +500,95 @@ export default function FileManagerPage() {
                   </div>
                 }
               >
-                <div className="max-w-full overflow-x-auto">
-                  <table className="w-full table-auto border-collapse">
-                    <thead>
-                      <tr className="border-t border-border">
-                        <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">File Name</th>
-                        <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Category</th>
-                        <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Folder</th>
-                        <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Size</th>
-                        <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Uploaded</th>
-                        <th className="px-6 py-3 text-center text-sm font-medium text-muted-foreground">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pageRows.map((f) => {
-                        const key = categorise(f.contentType);
-                        const meta = CATEGORY_META[key];
+                <DataTable
+                  aria-label="Files"
+                  rows={pageRows}
+                  rowKey={(f) => f.id}
+                  pageSize={0}
+                  empty="No files here yet."
+                  columns={[
+                    {
+                      key: "name",
+                      header: "File Name",
+                      cell: (f) => {
+                        const meta = CATEGORY_META[categorise(f.contentType)];
                         return (
-                          <tr key={f.id} className="border-t border-border/60">
-                            <td className="px-6 py-[18px] text-sm text-foreground">
-                              <div className="flex items-center gap-2">
-                                <meta.icon className={cn("h-5 w-5 shrink-0", meta.text)} />
-                                <span className="truncate font-medium">{f.name}</span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-[18px] text-sm text-muted-foreground">{meta.label}</td>
-                            <td className="px-6 py-[18px] text-sm text-muted-foreground">{f.folder ?? "–"}</td>
-                            <td className="px-6 py-[18px] text-sm tabular-nums text-muted-foreground">{formatBytes(f.sizeBytes)}</td>
-                            <td className="px-6 py-[18px] text-sm text-muted-foreground">{formatDate(f.createdAt)}</td>
-                            <td className="px-6 py-[18px] text-center">
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => void onRemove(f)}
-                                  disabled={removing === f.id}
-                                  className="text-muted-foreground hover:text-error disabled:opacity-50"
-                                  aria-label={`Delete ${f.name}`}
-                                >
-                                  {removing === f.id ? <Spinner className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
-                                </button>
-                                <a
-                                  href={f.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-muted-foreground hover:text-foreground"
-                                  aria-label={`View ${f.name}`}
-                                >
-                                  <Eye className="h-5 w-5" />
-                                </a>
-                              </div>
-                            </td>
-                          </tr>
+                          <div className="flex items-center gap-2">
+                            <meta.icon className={cn("h-5 w-5 shrink-0", meta.text)} />
+                            <span className="truncate font-medium text-foreground">{f.name}</span>
+                          </div>
                         );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-6 py-3">
-                  <p className="text-xs text-muted-foreground">
-                    Showing {pageRows.length} of {tableTotal.toLocaleString()} file{tableTotal === 1 ? "" : "s"}
-                  </p>
-                  <PaginationControls
-                    page={page}
-                    pageSize={PAGE_SIZE}
-                    total={tableTotal}
-                    onPrev={() => setPage((p) => Math.max(0, p - 1))}
-                    onNext={() => setPage((p) => p + 1)}
-                  />
-                </div>
+                      },
+                    },
+                    {
+                      key: "category",
+                      header: "Category",
+                      cell: (f) => (
+                        <span className="text-muted-foreground">{CATEGORY_META[categorise(f.contentType)].label}</span>
+                      ),
+                    },
+                    { key: "folder", header: "Folder", cell: (f) => <span className="text-muted-foreground">{f.folder ?? "–"}</span> },
+                    {
+                      key: "size",
+                      header: "Size",
+                      cell: (f) => <span className="tabular-nums text-muted-foreground">{formatBytes(f.sizeBytes)}</span>,
+                    },
+                    { key: "uploaded", header: "Uploaded", cell: (f) => <span className="text-muted-foreground">{formatDate(f.createdAt)}</span> },
+                    {
+                      key: "action",
+                      header: "Action",
+                      cell: (f) => (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setConfirmRemove(f)}
+                            disabled={removing === f.id}
+                            className="text-muted-foreground hover:text-error disabled:opacity-50"
+                            aria-label={`Delete ${f.name}`}
+                          >
+                            {removing === f.id ? <Spinner className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
+                          </button>
+                          <a
+                            href={f.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-muted-foreground hover:text-foreground"
+                            aria-label={`View ${f.name}`}
+                          >
+                            <Eye className="h-5 w-5" />
+                          </a>
+                        </div>
+                      ),
+                    },
+                  ]}
+                />
+                <ListFooter
+                  className="border-t border-border px-6 py-3"
+                  shown={pageRows.length}
+                  total={tableTotal}
+                  noun={tableTotal === 1 ? "file" : "files"}
+                  page={page}
+                  pageSize={PAGE_SIZE}
+                  onPrev={() => setPage((p) => Math.max(0, p - 1))}
+                  onNext={() => setPage((p) => p + 1)}
+                />
               </StateRegion>
             </div>
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmRemove !== null}
+        title="Delete file?"
+        description={`Delete “${confirmRemove?.name ?? ""}”? This can't be undone.`}
+        confirmLabel="Delete file"
+        onCancel={() => setConfirmRemove(null)}
+        onConfirm={() => {
+          const f = confirmRemove;
+          setConfirmRemove(null);
+          if (f) void onRemove(f);
+        }}
+      />
     </div>
   );
 }

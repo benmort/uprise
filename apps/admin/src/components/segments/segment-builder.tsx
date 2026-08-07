@@ -1064,7 +1064,7 @@ function ComplianceBand() {
             key={label}
             className="inline-flex items-center gap-1 rounded-full bg-surface-variant px-2.5 py-1 text-xs text-foreground"
           >
-            <CheckCircle2 className="h-3.5 w-3.5 text-[hsl(var(--success))]" /> {label}
+            <CheckCircle2 className="h-3.5 w-3.5 text-success" /> {label}
           </span>
         ))}
       </CardContent>

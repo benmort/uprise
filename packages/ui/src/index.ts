@@ -90,6 +90,20 @@ export * from "./components/quick-actions";
 export * from "./components/card";
 export * from "./components/list";
 export * from "./components/table";
+// data-table: the config-driven default admin table, built on the Table* primitives above.
+// Promoted from @uprise/field (which re-exports them for back-compat) together with
+// section-card / kpi-tile / progress-bar — the four generics every surface reuses.
+export * from "./components/data-table";
+export * from "./components/section-card";
+export * from "./components/kpi-tile";
+export * from "./components/progress-bar";
+// The small shared patterns every list/settings surface re-rolled (meld doc 14).
+export * from "./components/copy-button";
+export * from "./components/toggle-row";
+export * from "./components/entity-row";
+export * from "./components/refresh-button";
+export * from "./components/micro-label";
+export * from "./components/list-footer";
 export * from "./components/carousel";
 export * from "./components/reveal";
 
@@ -120,3 +134,6 @@ export * from "./lib/qr";
 // ── Hooks ───────────────────────────────────────────────────────────────────
 export * from "./hooks/use-local-storage";
 export * from "./hooks/use-countdown";
+export * from "./hooks/use-resend-cooldown";
+export * from "./hooks/use-copy-to-clipboard";
+export * from "./lib/resend-cooldown";

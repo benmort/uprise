@@ -1,6 +1,6 @@
 'use client';
 
-import { Spinner } from "@uprise/ui";
+import { Spinner, DataTable, CopyButton } from "@uprise/ui";
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { AtSign, Copy, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
@@ -21,6 +21,7 @@ import { Label } from "@uprise/ui";
 import { getSession } from '@/lib/session';
 import { getFeatureFlags } from '@/lib/api';
 import { TenantPageHeader } from '@/components/super/tenant-page-header';
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   EMAIL_TIMELINE_CURRENT_STEP,
   EMAIL_TIMELINE_STEPS,
@@ -44,36 +45,34 @@ function DnsRecordsTable({ identity }: { identity: EmailSenderIdentity | null })
   const records = identity?.dnsRecords ?? [];
   if (!identity || records.length === 0) return null;
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full text-left text-xs">
-        <thead className="bg-surface-variant text-muted-foreground">
-          <tr>
-            <th className="px-3 py-2 font-bold">Type</th>
-            <th className="px-3 py-2 font-bold">Host</th>
-            <th className="px-3 py-2 font-bold">Value</th>
-            <th className="px-3 py-2" />
-          </tr>
-        </thead>
-        <tbody>
-          {records.map((r) => (
-            <tr key={r.host} className="border-t border-border">
-              <td className="px-3 py-2 font-mono uppercase">{r.type}</td>
-              <td className="max-w-[180px] truncate px-3 py-2 font-mono" title={r.host}>{r.host}</td>
-              <td className="max-w-[220px] truncate px-3 py-2 font-mono" title={r.data}>{r.data}</td>
-              <td className="px-3 py-2">
-                <button
-                  type="button"
-                  aria-label="Copy record"
-                  onClick={() => void navigator.clipboard.writeText(`${r.host} CNAME ${r.data}`)}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="rounded-lg border border-border">
+      <DataTable
+        aria-label="DNS records"
+        rows={records}
+        rowKey={(r) => r.host}
+        columns={[
+          { key: "type", header: "Type", cell: (r) => <span className="font-mono text-xs uppercase">{r.type}</span> },
+          {
+            key: "host",
+            header: "Host",
+            cell: (r) => (
+              <span className="block max-w-[180px] truncate font-mono text-xs" title={r.host}>{r.host}</span>
+            ),
+          },
+          {
+            key: "value",
+            header: "Value",
+            cell: (r) => (
+              <span className="block max-w-[220px] truncate font-mono text-xs" title={r.data}>{r.data}</span>
+            ),
+          },
+          {
+            key: "copy",
+            header: "",
+            cell: (r) => <CopyButton iconOnly value={`${r.host} CNAME ${r.data}`} label="Copy record" variant="ghost" />,
+          },
+        ]}
+      />
     </div>
   );
 }
@@ -95,6 +94,7 @@ export default function TenantEmailPage() {
   const [requests, setRequests] = useState<EmailProvisioningRequest[]>([]);
   // The OPEN request a started run fulfils (set by its "Provision" button).
   const [fulfillingRequestId, setFulfillingRequestId] = useState<string | null>(null);
+  const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const [selectedRun, setSelectedRun] = useState<RunWithSteps | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -195,7 +195,6 @@ export default function TenantEmailPage() {
   };
 
   const revoke = async (identityId: string) => {
-    if (!window.confirm('Revoke this sender identity? Sends fall back to the platform address.')) return;
     setActionError(null);
     const res = await emailProvisioning.revokeIdentity(identityId);
     if (!res.ok) setActionError(res.error);
@@ -362,7 +361,7 @@ export default function TenantEmailPage() {
                         <button
                           type="button"
                           aria-label="Revoke identity"
-                          onClick={() => revoke(i.id)}
+                          onClick={() => setConfirmRevoke(i.id)}
                           className="ml-auto text-muted-foreground hover:text-error"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -534,6 +533,18 @@ export default function TenantEmailPage() {
           </CardContent>
         </Card>
       </div>
+      <ConfirmDialog
+        open={confirmRevoke !== null}
+        title="Revoke this sender identity?"
+        description="Revoke this sender identity? Sends fall back to the platform address."
+        confirmLabel="Revoke identity"
+        onCancel={() => setConfirmRevoke(null)}
+        onConfirm={() => {
+          const id = confirmRevoke;
+          setConfirmRevoke(null);
+          if (id) void revoke(id);
+        }}
+      />
     </div>
   );
 }

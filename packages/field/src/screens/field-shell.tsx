@@ -14,7 +14,7 @@ import {
 import { tenants, type TenantBrand as ApiTenantBrand } from "@uprise/api-client";
 import { useSyncQueue } from "../hooks/use-sync-queue";
 import { useTurfAutoDownload } from "../hooks/use-turf-auto-download";
-import { getSession, goToLogin } from "../lib/session";
+import { goToLogin, probeSession } from "../lib/session";
 import { getTenantBrand, getVolunteerId, setTenantBrand, setVolunteerId } from "../lib/volunteer";
 import { requestPersistentStorage } from "../lib/storage-persist";
 import { OfflineBanner } from "../components/offline-banner";
@@ -118,12 +118,35 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
     const brandPromise = cachedSlug ? tenants.brandBySlug(cachedSlug) : null;
 
     void (async () => {
-      const session = await getSession();
+      // Bounce ONLY on a definitive signed-out. A field volunteer is often on patchy
+      // mobile data (or behind a flaky tunnel in dev) — an unreachable API is retried,
+      // and if it stays unreachable we fall back to the cached volunteer id rather
+      // than dumping an authed volunteer on the sign-in page mid-shift.
+      let probe = await probeSession();
+      for (const delayMs of [800, 2000]) {
+        if (!alive || probe.state !== "unreachable") break;
+        await new Promise((r) => setTimeout(r, delayMs));
+        if (!alive) return;
+        probe = await probeSession();
+      }
       if (!alive) return;
-      if (!session) {
+      if (probe.state === "signed-out") {
         goToLogin();
         return;
       }
+      if (probe.state === "unreachable") {
+        const cachedId = getVolunteerId();
+        if (cachedId) {
+          // Known volunteer, unknown network: render the shell on the cached identity;
+          // the API's own auth still gates every write when connectivity returns.
+          setVid(cachedId);
+          setReady(true);
+        } else {
+          goToLogin();
+        }
+        return;
+      }
+      const session = probe.user;
       setVolunteerId(session.id);
       setVid(session.id);
       // Stash the current tenant so My turf can show the campaign brand badge, and persist the

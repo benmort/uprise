@@ -5,10 +5,10 @@ export type MiniBarTone = "primary" | "success" | "warning" | "error" | "knock" 
 
 const TONE_BG: Record<MiniBarTone, string> = {
   primary: "bg-primary",
-  success: "bg-[hsl(var(--success))]",
-  warning: "bg-[hsl(var(--warning-foreground))]",
-  error: "bg-[hsl(var(--error))]",
-  knock: "bg-[hsl(var(--knock))]",
+  success: "bg-success",
+  warning: "bg-warning-foreground",
+  error: "bg-error",
+  knock: "bg-knock",
   muted: "bg-surface-variant",
 };
 

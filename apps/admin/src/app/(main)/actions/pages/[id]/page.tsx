@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Copy as CopyIcon, ExternalLink, Megaphone } from "lucide-react";
+import { ExternalLink, Megaphone } from "lucide-react";
 import { actionPages, autodialer, type AuthPrincipal } from "@uprise/api-client";
 import type { ActionPageRecord, ActionPageSessionRow } from "@uprise/contracts";
 import { getSession } from "@/lib/session";
@@ -18,7 +18,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DataTable, KpiTile } from "@uprise/field";
-import { ConfirmDialog, Field, SegmentedControl, Select, SelectItem, Switch, TagChip } from "@uprise/ui";
+import { ConfirmDialog, Field, SegmentedControl, Select, SelectItem, Switch, TagChip, CopyButton } from "@uprise/ui";
 import { useToast } from "@/components/ui/toast";
 
 type Tab = "build" | "embed" | "results";
@@ -457,14 +457,6 @@ function EmbedTab({
   const iframeSnippet = `<iframe\n  src="${base}/${org}/actions/${page.publicSlug}/embed"\n  title="${page.headline ?? "Take action"}"\n  style="border:0;width:100%;max-width:480px;height:480px"\n  allow="microphone ${base}"\n></iframe>`;
   const snippet = form === "script" ? scriptSnippet : iframeSnippet;
 
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(snippet);
-      showToast({ tone: "success", title: "Snippet copied" });
-    } catch {
-      showToast({ tone: "error", title: "Couldn't copy — select the code and copy manually." });
-    }
-  };
 
   return (
     <div className="grid gap-4 xl:grid-cols-[1fr,420px]">
@@ -488,9 +480,10 @@ function EmbedTab({
                 ? "The script tag auto-sizes the widget and re-dispatches call events on the element."
                 : "The plain iframe is fixed-height; the script tag is easier for most sites."}
             </p>
-            <Button size="sm" variant="outline" onClick={() => void copy()}>
-              <CopyIcon className="mr-1.5 h-4 w-4" /> Copy
-            </Button>
+            <CopyButton
+              value={() => snippet}
+              onCopied={() => showToast({ tone: "success", title: "Snippet copied" })}
+            />
           </div>
         </Card>
         <p className="text-xs text-muted-foreground">

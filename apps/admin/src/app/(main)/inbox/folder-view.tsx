@@ -316,9 +316,9 @@ export default function InboxFolderView() {
   return (
     // flex column + min-h-0 so the conversation list's fs-stretch can claim the leftover
     // height in fullscreen; windowed, the list keeps its max-h cap and the card is content-height.
-    <div className="flex min-h-0 w-full flex-col rounded-2xl border border-gray-200 bg-white xl:col-span-9 xl:h-full dark:border-gray-800 dark:bg-white/[0.03]">
+    <div className="flex min-h-0 w-full flex-col rounded-2xl border border-border bg-surface xl:col-span-9 xl:h-full">
       {/* Toolbar */}
-      <div className="flex flex-col justify-between gap-3 p-4 border-b border-gray-200 dark:border-gray-800 sm:flex-row">
+      <div className="flex flex-col justify-between gap-3 p-4 border-b border-border sm:flex-row">
         <div className="flex items-center w-full gap-2">
           <ToolButton label="Refresh" onClick={refresh}>
             <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
@@ -329,20 +329,20 @@ export default function InboxFolderView() {
           <form onSubmit={(e) => e.preventDefault()}>
             <div className="relative">
               <span className="absolute -translate-y-1/2 left-4 top-1/2 pointer-events-none">
-                <Search className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                <Search className="w-5 h-5 text-muted-foreground" />
               </span>
               <Input
                 placeholder="Search every channel..."
                 value={q}
                 onChange={(e) => setRoute({ q: e.target.value })}
-                className="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 pl-[42px] pr-10 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
+                className="h-10 w-full rounded-lg border border-border bg-transparent px-4 py-2.5 pl-[42px] pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
               />
               {q ? (
                 <button
                   type="button"
                   aria-label="Clear search"
                   onClick={() => setRoute({ q: '' })}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -354,22 +354,22 @@ export default function InboxFolderView() {
 
       {/* Selection active → bulk-action bar; otherwise status + channel filters. */}
       {selected.size > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 bg-brand-50 px-4 py-2.5 dark:border-gray-800 dark:bg-brand-500/10">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-primary-container/20 px-4 py-2.5">
           <button
             type="button"
             onClick={toggleSelectAll}
             aria-label={allSelected ? 'Clear selection' : 'Select all'}
-            className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
+            className="text-muted-foreground hover:text-foreground"
           >
             {allSelected ? (
-              <CheckSquare className="h-5 w-5 text-brand-500" />
+              <CheckSquare className="h-5 w-5 text-primary" />
             ) : someSelected ? (
-              <MinusSquare className="h-5 w-5 text-brand-500" />
+              <MinusSquare className="h-5 w-5 text-primary" />
             ) : (
               <Square className="h-5 w-5" />
             )}
           </button>
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+          <span className="text-sm font-medium text-foreground">
             {selected.size} selected
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
@@ -398,14 +398,14 @@ export default function InboxFolderView() {
               type="button"
               onClick={clearSelection}
               aria-label="Clear selection"
-              className="ml-1 text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
+              className="ml-1 text-muted-foreground transition hover:text-foreground"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
       ) : (
-        <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 px-4 py-2.5 dark:border-gray-800">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
           {INBOX_FILTERS.map((f) => (
           <button
             key={f.key}
@@ -413,8 +413,8 @@ export default function InboxFolderView() {
             onClick={() => setRoute({ filter: f.key })}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               filter === f.key
-                ? 'bg-brand-500 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                ? 'bg-primary text-white'
+                : 'bg-surface-variant text-muted-foreground hover:bg-surface-variant/70'
             }`}
           >
             {f.label}
@@ -425,7 +425,7 @@ export default function InboxFolderView() {
             nothing to narrow, so it stays hidden). */}
         {availableChannels.length >= 2 ? (
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            <span className="mr-0.5 hidden text-xs font-medium text-gray-400 dark:text-gray-500 sm:inline">
+            <span className="mr-0.5 hidden text-xs font-medium text-muted-foreground/70 sm:inline">
               Channel
             </span>
             <ChannelChip active={channel === 'all'} onClick={() => setRoute({ channel: 'all' })}>
@@ -460,7 +460,7 @@ export default function InboxFolderView() {
           }
           onRetry={refresh}
           skeleton={
-            <div className="divide-y divide-gray-200 dark:divide-gray-800">
+            <div className="divide-y divide-border">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 px-4 py-4">
                   <Skeleton className="h-5 w-5 rounded-full" />
@@ -472,14 +472,14 @@ export default function InboxFolderView() {
             </div>
           }
         >
-          <div className="divide-y divide-gray-200 dark:divide-gray-800">
+          <div className="divide-y divide-border">
             {pageItems.map((u) => (
               <Link key={u.key} href={conversationHref(u, folder)}>
                 <div
-                  className={`flex cursor-pointer items-center px-4 py-4 dark:border-gray-800 ${
+                  className={`flex cursor-pointer items-center px-4 py-4 ${
                     selected.has(u.key)
-                      ? 'bg-brand-50 dark:bg-brand-500/10'
-                      : 'hover:bg-gray-100 dark:hover:bg-white/[0.03]'
+                      ? 'bg-primary-container/20'
+                      : 'hover:bg-surface-variant/60'
                   }`}
                 >
                   <div className="flex items-center w-1/5">
@@ -492,10 +492,10 @@ export default function InboxFolderView() {
                         e.stopPropagation();
                         toggleSelect(u.key);
                       }}
-                      className="mr-2 shrink-0 cursor-pointer text-gray-400 transition hover:text-gray-700 dark:hover:text-white"
+                      className="mr-2 shrink-0 cursor-pointer text-muted-foreground/70 transition hover:text-foreground"
                     >
                       {selected.has(u.key) ? (
-                        <CheckSquare className="h-5 w-5 text-brand-500" />
+                        <CheckSquare className="h-5 w-5 text-primary" />
                       ) : (
                         <Square className="h-5 w-5" />
                       )}
@@ -503,7 +503,7 @@ export default function InboxFolderView() {
                     <button
                       type="button"
                       aria-label={u.isStarred ? 'Unstar' : 'Star'}
-                      className="cursor-pointer text-gray-400"
+                      className="cursor-pointer text-muted-foreground/70"
                       onClick={(e) => {
                         e.preventDefault();
                         toggleStar(u);
@@ -511,19 +511,19 @@ export default function InboxFolderView() {
                     >
                       <Star className={`w-5 h-5 ${u.isStarred ? 'fill-current text-yellow-400' : ''}`} />
                     </button>
-                    <span className={`ml-3 truncate text-sm ${u.isRead ? 'text-gray-700 dark:text-gray-400' : 'font-semibold text-gray-900 dark:text-white/90'}`}>
+                    <span className={`ml-3 truncate text-sm ${u.isRead ? 'text-muted-foreground' : 'font-semibold text-foreground'}`}>
                       {u.sender}
                     </span>
                   </div>
 
                   <div className="flex items-center w-3/5 gap-3">
-                    <p className="text-sm text-gray-500 truncate">
+                    <p className="text-sm text-muted-foreground truncate">
                       {u.subject ? (
                         <>
-                          <span className={`${u.isRead ? 'font-medium text-gray-700 dark:text-gray-300' : 'font-semibold text-gray-900 dark:text-white'}`}>
+                          <span className={`${u.isRead ? 'font-medium text-foreground/80' : 'font-semibold text-foreground'}`}>
                             {u.subject}
                           </span>
-                          <span className="mx-1.5 text-gray-300 dark:text-gray-600">—</span>
+                          <span className="mx-1.5 text-muted-foreground/50">—</span>
                         </>
                       ) : null}
                       {previewText(u)}
@@ -534,7 +534,7 @@ export default function InboxFolderView() {
                   </div>
 
                   <div className="w-1/5 text-right">
-                    <span className="block text-xs text-gray-400">{u.time}</span>
+                    <span className="block text-xs text-muted-foreground/70">{u.time}</span>
                   </div>
                 </div>
               </Link>
@@ -544,8 +544,8 @@ export default function InboxFolderView() {
       </div>
 
       {/* Footer – shrink-0 keeps the pager on screen once the list above it stretches. */}
-      <div className="sticky bottom-0 flex shrink-0 items-center justify-between rounded-b-2xl border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-[#171f2f]">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+      <div className="sticky bottom-0 flex shrink-0 items-center justify-between rounded-b-2xl border-t border-border bg-surface px-4 py-3">
+        <p className="text-sm text-muted-foreground">
           Showing {rangeStart}–{rangeEnd} of {filtered.length}
         </p>
         <div className="flex items-center justify-end gap-2">
@@ -554,11 +554,11 @@ export default function InboxFolderView() {
             aria-label="Previous page"
             disabled={currentPage <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-400 dark:hover:bg-white/[0.03]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-surface text-muted-foreground hover:bg-surface-variant disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="text-xs text-gray-500 dark:text-gray-400">
+          <span className="text-xs text-muted-foreground">
             {currentPage} / {totalPages}
           </span>
           <button
@@ -566,7 +566,7 @@ export default function InboxFolderView() {
             aria-label="Next page"
             disabled={currentPage >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-400 dark:hover:bg-white/[0.03]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-surface text-muted-foreground hover:bg-surface-variant disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -592,8 +592,8 @@ function ChannelChip({
       aria-pressed={active}
       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
         active
-          ? 'bg-brand-500 text-white'
-          : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+          ? 'bg-primary text-white'
+          : 'bg-surface-variant text-muted-foreground hover:bg-surface-variant/70'
       }`}
     >
       {children}
@@ -617,7 +617,7 @@ function BulkButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-transparent dark:text-gray-200 dark:hover:bg-gray-800"
+      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1 text-xs font-medium text-foreground transition hover:bg-surface-variant disabled:cursor-not-allowed disabled:opacity-50"
     >
       <Icon className="h-3.5 w-3.5" />
       {children}
@@ -645,8 +645,8 @@ function ToolButton({
       aria-label={label}
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center justify-center w-full h-10 text-gray-500 transition-colors border border-gray-200 rounded-lg max-w-10 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 ${
-        danger ? 'hover:text-error-500 dark:hover:text-error-500' : 'hover:text-gray-700 dark:hover:text-white'
+      className={`flex items-center justify-center w-full h-10 text-muted-foreground transition-colors border border-border rounded-lg max-w-10 hover:bg-surface-variant disabled:cursor-not-allowed disabled:opacity-40 ${
+        danger ? 'hover:text-error' : 'hover:text-foreground'
       }`}
     >
       {children}

@@ -1,5 +1,5 @@
 import { ComplianceSettings } from "@/components/settings/compliance";
-import { PageHeader } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/shell/page-header";
 
 // Compliance also lives as a tab on the General settings page; this standalone route
 // renders the same component so any direct links keep working.

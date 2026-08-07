@@ -3,7 +3,7 @@
 // Account security — password, active sessions, delete account. Extracted from the
 // standalone /future/security page so it renders both there and as a tab on the
 // General settings page. Self-contained: fetches the session for delete-account gating.
-import { Spinner } from "@uprise/ui";
+import { Spinner, RefreshButton } from "@uprise/ui";
 import { useCallback, useEffect, useState } from "react";
 import { Laptop, Lock, RefreshCw, Trash2 } from "lucide-react";
 import { profile, sessions as sessionsApi, type SessionSummaryResponse } from "@uprise/api-client";
@@ -252,16 +252,7 @@ function ActiveSessionsCard() {
               Sign out everywhere else
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void refresh()}
-            disabled={busy}
-            className="cursor-pointer"
-            aria-label="Refresh sessions"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
+          <RefreshButton iconOnly label="Refresh sessions" onClick={() => void refresh()} disabled={busy} />
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

@@ -8,8 +8,8 @@ import { releaseTurf } from "../api";
 import { useAssignments, useVolunteerMetrics } from "../hooks/use-canvass";
 import { invalidateApi } from "../hooks/use-api";
 import { getVolunteerId, getVolunteerName } from "../lib/volunteer";
-import { KpiTile } from "../components/kpi-tile";
-import { SectionCard } from "../components/section-card";
+import { KpiTile } from "@uprise/ui";
+import { SectionCard } from "@uprise/ui";
 import { useMeDrawer } from "./me-drawer";
 
 /**

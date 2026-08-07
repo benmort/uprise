@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Copy, ExternalLink, Globe, Lock } from "lucide-react";
+import { ExternalLink, Globe, Lock } from "lucide-react";
 import { parentDomain } from "@uprise/domains";
 import { getSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
+import { CopyButton } from "@uprise/ui";
 
 /**
  * Domains settings — the tenant's web address(es), Vercel-style.
@@ -109,17 +110,7 @@ function DomainRow({
   primary?: boolean;
   status: "active" | "pending";
 }) {
-  const [copied, setCopied] = useState(false);
   const url = `https://${host}`;
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard unavailable — no-op */
-    }
-  };
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface p-4">
       <Globe className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -135,14 +126,7 @@ function DomainRow({
         <StatusPill status={status} />
       </div>
       <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => void copy()}
-          aria-label="Copy address"
-          className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:bg-surface-variant hover:text-foreground"
-        >
-          {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
-        </button>
+        <CopyButton iconOnly value={url} label="Copy address" variant="outline" className="h-8 w-8" />
         <a
           href={url}
           target="_blank"

@@ -19,7 +19,7 @@ export function ActivityFeed({ items, loading }: { items: ActivityItem[]; loadin
     return <p className="text-sm text-muted-foreground">No recent activity yet.</p>;
   }
   return (
-    <ul className="divide-y divide-[hsl(var(--muted))]">
+    <ul className="divide-y divide-muted">
       {items.map((item) => {
         const row = (
           <div className="flex items-center gap-3 py-2.5">

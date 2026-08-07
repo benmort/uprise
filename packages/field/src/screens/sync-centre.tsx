@@ -11,7 +11,7 @@ import { invalidateApi } from "../hooks/use-api";
 import { getVolunteerId, getVolunteerName, greeting } from "../lib/volunteer";
 import { logout } from "../lib/session";
 import { useSyncQueue } from "../hooks/use-sync-queue";
-import { SectionCard } from "../components/section-card";
+import { SectionCard } from "@uprise/ui";
 import { SyncStatusBadge } from "../components/sync-status-badge";
 
 function ago(iso: string): string {

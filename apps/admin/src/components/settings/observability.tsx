@@ -13,6 +13,8 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { getTenantActivity, type TenantActivityResponse } from "@/lib/api";
 import { getFlagAdmin, setTenantFlag, type FeatureFlagKey, type FlagAdminEntry } from "@/lib/api/flags";
+import { ToggleRow } from "@uprise/ui";
+import { TriState } from "@/components/super/flag-controls";
 import {
   type AlertSoundProfile,
   type ResponderAlertSettings,
@@ -122,29 +124,11 @@ export function TenantFeatureFlagsEditor() {
                 Effective: <span className="font-medium text-foreground">{f.effective ? "On" : "Off"}</span> · source: {f.source}
               </p>
             </div>
-            <div className="inline-flex overflow-hidden rounded-lg border border-border">
-              {([
-                ["Inherit", null],
-                ["On", true],
-                ["Off", false],
-              ] as const).map(([label, val]) => {
-                const active = f.tenantOverride === val;
-                return (
-                  <button
-                    key={label}
-                    type="button"
-                    disabled={busy === f.key}
-                    onClick={() => void apply(f.key, val)}
-                    className={cn(
-                      "px-2.5 py-1 text-xs font-semibold transition disabled:opacity-50",
-                      active ? "bg-primary text-white" : "text-foreground hover:bg-surface-variant",
-                    )}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
+            <TriState
+              value={f.tenantOverride}
+              disabled={busy === f.key}
+              onChange={(val) => void apply(f.key, val)}
+            />
           </div>
         ))}
         {rows.length === 0 ? (
@@ -247,30 +231,24 @@ export function ResponderAlertsSettings() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div id="tour-settings-alerts" className="grid gap-3 text-sm sm:grid-cols-2">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={alertSettings.soundEnabled}
-              onChange={(e) => setAlertSettings((p) => ({ ...p, soundEnabled: e.target.checked }))}
-            />
-            Sound enabled
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={alertSettings.reducedAudio}
-              onChange={(e) => setAlertSettings((p) => ({ ...p, reducedAudio: e.target.checked }))}
-            />
-            Reduced audio
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={alertSettings.outsideInboxSound}
-              onChange={(e) => setAlertSettings((p) => ({ ...p, outsideInboxSound: e.target.checked }))}
-            />
-            Off-page chime
-          </label>
+          <ToggleRow
+            label="Sound enabled"
+            checked={alertSettings.soundEnabled}
+            onCheckedChange={(v) => setAlertSettings((p) => ({ ...p, soundEnabled: v }))}
+            aria-label="Sound enabled"
+          />
+          <ToggleRow
+            label="Reduced audio"
+            checked={alertSettings.reducedAudio}
+            onCheckedChange={(v) => setAlertSettings((p) => ({ ...p, reducedAudio: v }))}
+            aria-label="Reduced audio"
+          />
+          <ToggleRow
+            label="Off-page chime"
+            checked={alertSettings.outsideInboxSound}
+            onCheckedChange={(v) => setAlertSettings((p) => ({ ...p, outsideInboxSound: v }))}
+            aria-label="Off-page chime"
+          />
           <label className="flex items-center gap-2">
             Profile
             <select

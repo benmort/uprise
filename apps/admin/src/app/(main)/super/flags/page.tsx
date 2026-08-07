@@ -8,6 +8,8 @@ import {
 import { FLAG_META, NAV_FLAGS, type FeatureFlagKey } from "@uprise/flags";
 import { cn } from "@/lib/utils";
 import { FlagSourceBadge } from "@/components/super/flag-source-badge";
+import { TriState, flagLabel } from "@/components/super/flag-controls";
+import { SuperPageHeader } from "@/components/super/super-page-header";
 import {
   getFlagAdminFor,
   searchNetworks,
@@ -37,14 +39,6 @@ function isGlobalOnly(f: FlagAdminEntry) {
   );
 }
 
-function flagLabel(f: string) {
-  if (NAV_LABEL[f]) return NAV_LABEL[f];
-  return f
-    .replace(/^FEATURE_/, "")
-    .replace(/_ENABLED$/, "")
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 type TabKind = "tenant" | "network" | "platform";
 type SelTarget = { type: TabKind; id: string; label: string; sub?: string };
@@ -57,47 +51,6 @@ const PLATFORM_TARGET: SelTarget = {
   sub: "every tenant",
 };
 
-/** Tri-state override control: Inherit (clear) / Force on / Force off. */
-function TriState({
-  value,
-  disabled,
-  onChange,
-}: {
-  value: boolean | null;
-  disabled?: boolean;
-  onChange: (v: boolean | null) => void;
-}) {
-  const opts: Array<{ v: boolean | null; label: string; Icon: typeof Check }> = [
-    { v: null, label: "Inherit", Icon: Minus },
-    { v: true, label: "On", Icon: Check },
-    { v: false, label: "Off", Icon: X },
-  ];
-  return (
-    <div className="inline-flex overflow-hidden rounded-lg border border-border">
-      {opts.map((o) => {
-        const active = value === o.v;
-        return (
-          <button
-            key={String(o.v)}
-            type="button"
-            disabled={disabled}
-            onClick={() => onChange(o.v)}
-            className={cn(
-              "flex items-center gap-1 px-2.5 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-              active && o.v === true && "bg-primary text-primary-foreground",
-              active && o.v === false && "bg-error text-white",
-              active && o.v === null && "bg-surface-variant font-medium text-foreground",
-              !active && "text-muted-foreground hover:bg-surface-variant",
-            )}
-          >
-            <o.Icon className="h-3 w-3" />
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 export default function FeatureFlagsPage() {
   const [tab, setTab] = useState<TabKind>("tenant");
@@ -202,13 +155,10 @@ export default function FeatureFlagsPage() {
 
   return (
     <main className="page-stack">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 shrink-0 text-primary" />
-            <h1 className="text-2xl font-extrabold">Feature flags</h1>
-          </div>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+      <SuperPageHeader
+        title="Feature flags"
+        description={
+          <span className="block max-w-2xl">
             Per-tenant and per-network overrides on top of each target&apos;s plan. Pick a
             tenant or network, then force a feature on or off, or leave it to inherit
             from the plan. The Platform tab holds the switches that apply everywhere at once –
@@ -217,15 +167,17 @@ export default function FeatureFlagsPage() {
               Plans
             </Link>{" "}
             page.
-          </p>
-        </div>
-        <Link
-          href="/super/plans"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-foreground hover:bg-surface-variant"
-        >
-          <SlidersHorizontal className="h-4 w-4" /> Plans
-        </Link>
-      </div>
+          </span>
+        }
+        actions={
+          <Link
+            href="/super/plans"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-foreground hover:bg-surface-variant"
+          >
+            <SlidersHorizontal className="h-4 w-4" /> Plans
+          </Link>
+        }
+      />
 
       {actionError ? (
         <div className="rounded-lg border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">{actionError}</div>

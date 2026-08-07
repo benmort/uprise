@@ -6,6 +6,7 @@
 // future/form-elements demo now lives (the Forms section), on the shared primitives.
 import { useState } from "react";
 import { Bell, Inbox, Star } from "lucide-react";
+import { PageHeader } from "@/components/shell/page-header";
 import {
   Alert,
   Avatar,
@@ -19,6 +20,7 @@ import {
   Button,
   ButtonGroup,
   Card,
+  CopyButton,
   CardContent,
   CardDescription,
   CardFooter,
@@ -27,6 +29,7 @@ import {
   Carousel,
   CarouselItem,
   Checkbox,
+  DataTable,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -34,13 +37,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   EmptyState,
+  EntityRow,
   Field,
   Image,
   Input,
+  KpiTile,
   Label,
   Link,
   List,
+  ListFooter,
   ListItem,
+  MicroLabel,
   Modal,
   ModalClose,
   ModalContent,
@@ -53,13 +60,17 @@ import {
   PopoverContent,
   PopoverTrigger,
   Progress,
+  ProgressBar,
   RadioGroup,
+  RefreshButton,
   RadioGroupItem,
   Ribbon,
+  SectionCard,
   Select,
   SelectItem,
   Skeleton,
   Spinner,
+  StatusBadge,
   Switch,
   Table,
   TableBody,
@@ -74,6 +85,7 @@ import {
   TabsList,
   TabsTrigger,
   Textarea,
+  ToggleRow,
   Tooltip,
   useToast,
 } from "@uprise/ui";
@@ -105,13 +117,15 @@ export default function KitchenSinkPage() {
 
   return (
     <div className="page-stack">
-      <div>
-        <h1 className="text-3xl font-semibold text-foreground">Kitchen Sink</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Every <code className="rounded bg-surface-variant px-1">@uprise/ui</code> primitive, live. See{" "}
-          <code className="rounded bg-surface-variant px-1">packages/ui/COMPONENTS.md</code> for the catalogue.
-        </p>
-      </div>
+      <PageHeader
+        title="Kitchen Sink"
+        description={
+          <>
+            Every <code className="rounded bg-surface-variant px-1">@uprise/ui</code> primitive, live. See{" "}
+            <code className="rounded bg-surface-variant px-1">packages/ui/COMPONENTS.md</code> for the catalogue.
+          </>
+        }
+      />
 
       {/* ── Primitives ─────────────────────────────────────────────────────── */}
       <Section title="Buttons">
@@ -420,6 +434,82 @@ export default function KitchenSinkPage() {
               </CarouselItem>
             ))}
           </Carousel>
+        </div>
+
+        {/* Promoted from @uprise/field — the four generics every surface reuses. */}
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <KpiTile label="Doors knocked" value="1,204" delta={{ value: "+12% vs last week", direction: "up" }} />
+          <KpiTile label="Conversations" value="312" size="md" caption="of 1,204 doors" />
+          <KpiTile label="Persuasion" value="87" size="sm" delta={{ value: "-3%", direction: "down" }} />
+        </div>
+
+        <div className="mt-4">
+          <SectionCard
+            title="Section card"
+            description="Titled surface with an action slot — the admin's workhorse card."
+            action={<Button size="sm" variant="outline">Action</Button>}
+          >
+            <div className="space-y-3">
+              <ProgressBar value={48} max={120} label={<><span>Doors knocked</span><span>48 / 120</span></>} />
+              <ProgressBar value={70} tone="primary" />
+            </div>
+          </SectionCard>
+        </div>
+
+        {/* The small shared patterns: copy / refresh / toggle / entity rows / footer / eyebrow. */}
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="space-y-3">
+            <MicroLabel>Buttons &amp; rows</MicroLabel>
+            <Row>
+              <CopyButton value="https://uprise.org.au/join" />
+              <CopyButton value="UP-4821" iconOnly label="Copy code" />
+              <RefreshButton />
+              <RefreshButton refreshing />
+            </Row>
+            <EntityRow
+              icon={<Bell className="h-4 w-4" />}
+              title="NationBuilder"
+              meta="demo-nation · connected 3 May 2026"
+              trailing={<Badge variant="success" dot>Connected</Badge>}
+            />
+          </div>
+          <div className="space-y-3">
+            <MicroLabel>Toggles &amp; footers</MicroLabel>
+            <ToggleRow
+              label="Door-knocks"
+              description="Push canvass results to the CRM."
+              checked={toggled}
+              onCheckedChange={setToggled}
+              aria-label="Door-knocks"
+            />
+            <ToggleRow label="Opt-outs (always on)" checked disabled onCheckedChange={() => {}} aria-label="Opt-outs (always on)" />
+            <ListFooter
+              shown={25}
+              total={137}
+              noun="audiences"
+              page={0}
+              pageSize={25}
+              onPrev={() => {}}
+              onNext={() => {}}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <DataTable
+            aria-label="Example turf table"
+            columns={[
+              { key: "name", header: "Turf", cell: (r: { name: string; doors: number; status: string }) => r.name },
+              { key: "doors", header: "Doors", numeric: true, cell: (r) => r.doors.toLocaleString() },
+              { key: "status", header: "Status", cell: (r) => <StatusBadge status={r.status} /> },
+            ]}
+            rows={[
+              { name: "Newtown East", doors: 182, status: "DONE" },
+              { name: "Enmore Rd", doors: 95, status: "SYNCING" },
+              { name: "Kew Junction", doors: 240, status: "FAILED" },
+            ]}
+            rowKey={(r) => r.name}
+          />
         </div>
       </Section>
     </div>

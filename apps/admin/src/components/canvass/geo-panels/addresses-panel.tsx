@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Check, LocateFixed, MapPin, Plus, Scissors, Search, UserCheck } from "lucide-react";
-import { Spinner } from "@uprise/ui";
+import { Spinner, DataTable } from "@uprise/ui";
 import { type WalkMode } from "@uprise/field";
 import { createTurfFromSources, nearbyAddresses } from "@/lib/api/geo";
 import { useCutTurf } from "@/lib/canvass/use-cut-turf";
@@ -207,7 +207,7 @@ export function AddressesPanel({ view }: { view: WalkMode }) {
             <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
               <li className="tabular-nums">{active.distanceM.toLocaleString()} m from the pin</li>
               {active.hasContact ? (
-                <li className="flex items-center gap-1 text-[hsl(var(--success))]">
+                <li className="flex items-center gap-1 text-success">
                   <UserCheck className="h-3.5 w-3.5" /> Existing contact at this address
                 </li>
               ) : null}
@@ -315,7 +315,7 @@ export function AddressesPanel({ view }: { view: WalkMode }) {
                       <LocateFixed className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       <span className="truncate font-medium text-foreground">{formatDoorLabel(d.address)}</span>
                       {d.hasContact ? (
-                        <UserCheck className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--success))]" />
+                        <UserCheck className="h-3.5 w-3.5 shrink-0 text-success" />
                       ) : null}
                       <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
                         {d.distanceM.toLocaleString()} m
@@ -370,61 +370,45 @@ export function AddressesPanel({ view }: { view: WalkMode }) {
       ) : (
         <Card>
           <CardContent className="space-y-4 pt-6">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
-                    <th className="py-2 pr-4">Address</th>
-                    <th className="py-2 pr-4">Coordinates</th>
-                    <th className="py-2 pr-4">Quick Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {searching
-                    ? Array.from({ length: 6 }).map((_, index) => (
-                        <tr key={`addr-skeleton-${index}`} className="border-b border-border/60">
-                          <td className="py-3 pr-4"><Skeleton className="h-4 w-64" /></td>
-                          <td className="py-3 pr-4"><Skeleton className="h-4 w-32" /></td>
-                          <td className="py-3 pr-4"><Skeleton className="h-4 w-24" /></td>
-                        </tr>
-                      ))
-                    : hits.map((h) => (
-                        <tr
-                          key={h.id}
-                          className="group cursor-pointer border-b border-border/60 hover:bg-primary-container/10"
-                          onClick={() => void pick(h)}
-                        >
-                          <td className="py-3 pr-4 font-medium text-primary">{h.label}</td>
-                          <td className="py-3 pr-4 tabular-nums text-muted-foreground">
-                            {h.lat.toFixed(5)}, {h.lng.toFixed(5)}
-                          </td>
-                          <td className="py-3 pr-4">
-                            <div className="flex items-center gap-2 opacity-60 transition group-hover:opacity-100">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void pick(h);
-                                }}
-                              >
-                                <MapPin className="mr-1.5 h-3.5 w-3.5" />
-                                Plot on map
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                  {!searching && hits.length === 0 && (
-                    <tr>
-                      <td colSpan={3} className="py-6 text-center text-muted-foreground">
-                        No addresses match &ldquo;{trimmed}&rdquo;.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              aria-label="Addresses"
+              rows={hits}
+              rowKey={(h) => h.id}
+              pageSize={0}
+              loading={searching}
+              skeletonRows={6}
+              onRowClick={(h) => void pick(h)}
+              empty={`No addresses match “${trimmed}”.`}
+              columns={[
+                { key: "address", header: "Address", cell: (h) => <span className="font-medium text-primary">{h.label}</span> },
+                {
+                  key: "coords",
+                  header: "Coordinates",
+                  cell: (h) => (
+                    <span className="tabular-nums text-muted-foreground">
+                      {h.lat.toFixed(5)}, {h.lng.toFixed(5)}
+                    </span>
+                  ),
+                },
+                {
+                  key: "actions",
+                  header: "Quick Actions",
+                  cell: (h) => (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void pick(h);
+                      }}
+                    >
+                      <MapPin className="mr-1.5 h-3.5 w-3.5" />
+                      Plot on map
+                    </Button>
+                  ),
+                },
+              ]}
+            />
             {!searching && hits.length > 0 && (
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <MapPin className="h-3.5 w-3.5" />

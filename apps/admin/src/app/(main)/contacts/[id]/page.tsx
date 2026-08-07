@@ -38,9 +38,9 @@ function when(iso: string): string {
 function TimelineCard({ e }: { e: TimelineEntry }) {
   if (e.kind === "knock") {
     return (
-      <div className="rounded-xl border border-[hsl(var(--knock))]/30 bg-[hsl(var(--knock))]/[0.06] p-3">
+      <div className="rounded-xl border border-knock/30 bg-knock/[0.06] p-3">
         <div className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1.5 text-sm font-semibold text-[hsl(var(--knock))]">
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-knock">
             <DoorOpen className="h-3.5 w-3.5" />
             Door knock
           </span>

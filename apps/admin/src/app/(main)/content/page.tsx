@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowRight, MessageSquareText, ListChecks, Sparkles, Tag, FileText } from "lucide-react";
 import { SectionCard } from "@uprise/field";
-import { PageHeader } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/shell/page-header";
 
 const TOOLS = [
   {

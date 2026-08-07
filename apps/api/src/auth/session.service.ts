@@ -37,9 +37,70 @@ export interface SessionSummary {
  * logout. This backs the standalone auth frontend (doc 14) — the API issues an
  * httpOnly cookie; other apps redirect to the auth app and share it.
  */
+/**
+ * How long a resolved principal may be reused. Deliberately seconds, not minutes.
+ *
+ * This exists to collapse a BURST — a map firing twenty tile requests, a dashboard opening eight
+ * panels at once — into one principal build, not to keep sessions warm. The window is the cost:
+ * an explicitly revoked session is evicted immediately (see `evict`), but a change made straight
+ * in the database, or a membership edited elsewhere, is honoured up to this late.
+ *
+ * Set OPS_SESSION_CACHE_MS=0 to switch it off entirely.
+ */
+const SESSION_CACHE_MS = 5_000;
+
+/** Bound on the cache — a shared server must not accumulate principals without limit. */
+const SESSION_CACHE_MAX = 500;
+
 @Injectable()
 export class SessionService {
+  /**
+   * token → the principal it resolved to, with the moment it was cached.
+   *
+   * Per-process, so on Vercel each lambda keeps its own; that is fine for the burst this targets
+   * (a burst lands on one lambda) and it means nothing to invalidate across instances beyond the
+   * TTL. Nulls are NOT cached: a failed resolve is cheap and caching it would keep a just-signed-in
+   * user locked out for the window.
+   */
+  private readonly resolved = new Map<string, { at: number; value: ResolvedSession }>();
+
+  /**
+   * Resolves currently in flight, keyed by token.
+   *
+   * A result cache alone does NOT fix the case this exists for. Twenty tile requests arrive
+   * together, so all twenty start before any finishes and every one of them misses — which is
+   * exactly the burst that drained the pool. Sharing the in-flight promise is what collapses
+   * concurrent callers onto one principal build; the result cache then covers the requests that
+   * follow it.
+   */
+  private readonly inflight = new Map<string, Promise<ResolvedSession | null>>();
+
   constructor(private readonly prisma: PrismaService) {}
+
+  private get cacheMs(): number {
+    const raw = Number(process.env.OPS_SESSION_CACHE_MS ?? SESSION_CACHE_MS);
+    return Number.isFinite(raw) && raw >= 0 ? raw : SESSION_CACHE_MS;
+  }
+
+  /**
+   * Drop a token's cached principal. Called from every revoke path, so signing out takes effect
+   * immediately rather than after the TTL — which is the revocation people actually perform.
+   */
+  private evict(token?: string | null): void {
+    if (token) {
+      this.resolved.delete(token);
+      this.inflight.delete(token);
+    } else {
+      this.resolved.clear();
+      this.inflight.clear();
+    }
+  }
+
+  /** Test seam + the "revoked by user id" paths, which do not know the tokens involved. */
+  private evictAll(): void {
+    this.resolved.clear();
+    this.inflight.clear();
+  }
 
   async create(
     userId: string,
@@ -77,6 +138,28 @@ export class SessionService {
   }
 
   /**
+   * Is this token a live session? One indexed lookup, nothing else.
+   *
+   * `resolve` costs three sequential queries — session, user, memberships — plus a last-seen
+   * write, because it builds a full principal with a role and an active tenant. Routes that serve
+   * static reference data need none of that: they need to know the caller is signed in. Paying
+   * 3× for an answer you discard is how a map's tile burst drained the connection pool and 500'd
+   * 22 requests in eight seconds.
+   *
+   * Deliberately returns no role and no tenant, so it cannot accidentally satisfy a `@Roles` or
+   * `@RequirePermission` gate — a route using this must genuinely need neither.
+   */
+  async resolveLight(token: string): Promise<{ userId: string } | null> {
+    if (!token) return null;
+    const session = await this.prisma.session.findUnique({
+      where: { token },
+      select: { userId: true, expiresAt: true },
+    });
+    if (!session || session.expiresAt.getTime() <= Date.now()) return null;
+    return { userId: session.userId };
+  }
+
+  /**
    * Resolve a session token to its actor. The active tenant is the session's
    * pinned tenant (set via select-tenant) if it's still a valid membership,
    * else the user's earliest membership.
@@ -87,6 +170,46 @@ export class SessionService {
     opts?: { forcedTenantId?: string | null },
   ): Promise<ResolvedSession | null> {
     if (!token) return null;
+    // A host-forced tenant changes what the principal RESOLVES TO, so it must never read a
+    // principal cached for the unforced request (or vice versa). Those skip the cache entirely
+    // rather than complicate the key — they are a page load, not a burst.
+    const cacheable = this.cacheMs > 0 && !opts?.forcedTenantId;
+    if (cacheable) {
+      const hit = this.resolved.get(token);
+      if (hit && Date.now() - hit.at < this.cacheMs) return hit.value;
+      if (hit) this.resolved.delete(token);
+    }
+    // Join a resolve already running for this token rather than starting a second one.
+    const running = cacheable ? this.inflight.get(token) : undefined;
+    if (running) return running;
+
+    const pending = this.resolveUncached(token, meta, opts);
+    if (cacheable) this.inflight.set(token, pending);
+    let value: ResolvedSession | null;
+    try {
+      value = await pending;
+    } finally {
+      if (cacheable) this.inflight.delete(token);
+    }
+    // Only successes are cached. A null is cheap to recompute, and caching it would lock out a
+    // user whose session became valid a moment ago.
+    if (cacheable && value) {
+      if (this.resolved.size >= SESSION_CACHE_MAX) {
+        // Oldest insertion first — Map preserves insertion order, so this drops the stalest.
+        const oldest = this.resolved.keys().next().value;
+        if (oldest !== undefined) this.resolved.delete(oldest);
+      }
+      this.resolved.set(token, { at: Date.now(), value });
+    }
+    return value;
+  }
+
+  /** The real principal build — three queries and a last-seen stamp. Wrapped by `resolve`. */
+  private async resolveUncached(
+    token: string,
+    meta?: { userAgent?: string | null; ipAddress?: string | null },
+    opts?: { forcedTenantId?: string | null },
+  ): Promise<ResolvedSession | null> {
     const session = await this.prisma.session.findUnique({ where: { token } });
     if (!session || session.expiresAt.getTime() <= Date.now()) return null;
     const user = await this.prisma.user.findUnique({ where: { id: session.userId } });
@@ -169,11 +292,15 @@ export class SessionService {
 
   async revoke(token: string): Promise<void> {
     if (!token) return;
+    this.evict(token);
     await this.prisma.session.deleteMany({ where: { token } });
   }
 
   /** Revoke every session for a user (e.g. after a password reset). */
   async revokeAllForUser(userId: string): Promise<void> {
+    // Token-keyed cache, user-keyed revoke — clear it rather than leave a signed-out principal
+    // usable. This runs after a password reset, where being late is the whole problem.
+    this.evictAll();
     await this.prisma.session.deleteMany({ where: { userId } });
   }
 
@@ -196,11 +323,13 @@ export class SessionService {
 
   /** Revoke one session by id, scoped to the owner (can't touch another user's). */
   async revokeById(userId: string, sessionId: string): Promise<void> {
+    this.evictAll();
     await this.prisma.session.deleteMany({ where: { id: sessionId, userId } });
   }
 
   /** Sign out everywhere except the caller's current session. */
   async revokeOthers(userId: string, currentToken: string): Promise<void> {
+    this.evictAll();
     await this.prisma.session.deleteMany({ where: { userId, token: { not: currentToken } } });
   }
 }

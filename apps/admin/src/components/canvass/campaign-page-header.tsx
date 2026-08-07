@@ -5,20 +5,19 @@ import type { LucideIcon } from "lucide-react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { listCampaigns } from "@/lib/api/campaigns";
 import { useApi } from "@/lib/use-api";
-import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { PageHeader } from "@/components/shell/page-header";
 import { CampaignSwitcher } from "@/components/canvass/campaign-switcher";
 
 /**
- * Shared header for the campaign-scoped canvass sub-pages. Renders the standard breadcrumb trail
- * (Canvassing › <title>) in the standard top position, then a title row with the campaign switcher
- * INLINE beside the title, plus an optional actions slot. Replaces the old per-page "‹ Canvass" back
- * buttons and the layout's detached campaign `<select>` — one header, every sub-page. The switcher
- * swaps the `[campaignId]` path segment in place (URL is the source of truth). Campaigns are fetched
- * through the cached `useApi`, so navigating between sub-pages doesn't refetch the list.
+ * Shared header for the campaign-scoped canvass sub-pages: the unified `PageHeader`
+ * with the campaign switcher in the `titleAccessory` slot and a `Canvassing › <title>`
+ * trail. The switcher swaps the `[campaignId]` path segment in place (URL is the source
+ * of truth); campaigns come through the cached `useApi`, so navigating between sub-pages
+ * doesn't refetch the list.
  */
 export function CampaignPageHeader({
   title,
-  icon: Icon,
+  icon,
   description,
   actions,
   allowAllCampaigns = true,
@@ -53,33 +52,23 @@ export function CampaignPageHeader({
   };
 
   return (
-    <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            {Icon ? <Icon className="h-6 w-6 shrink-0 text-primary" /> : null}
-            <h1 className="text-2xl font-extrabold">{title}</h1>
-          </div>
-          {campaigns.length > 0 ? (
-            <CampaignSwitcher
-              campaigns={campaigns}
-              activeId={campaignId ?? ""}
-              allActive={!campaignId}
-              onSelect={switchTo}
-              onSelectAll={allowAllCampaigns ? () => router.push(`/canvass${subPath}`) : undefined}
-            />
-          ) : null}
-        </div>
-        {/* Actions, then the breadcrumb trail pinned to the far right of the title line. */}
-        <div className="flex flex-wrap items-center gap-3">
-          {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
-          <Breadcrumbs
-            className="ml-auto"
-            items={[{ label: "Canvassing", href: "/canvass" }, { label: title }]}
+    <PageHeader
+      icon={icon}
+      title={title}
+      description={description}
+      actions={actions}
+      breadcrumbs={[{ label: "Canvassing", href: "/canvass" }, { label: title }]}
+      titleAccessory={
+        campaigns.length > 0 ? (
+          <CampaignSwitcher
+            campaigns={campaigns}
+            activeId={campaignId ?? ""}
+            allActive={!campaignId}
+            onSelect={switchTo}
+            onSelectAll={allowAllCampaigns ? () => router.push(`/canvass${subPath}`) : undefined}
           />
-        </div>
-      </div>
-      {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
-    </>
+        ) : null
+      }
+    />
   );
 }

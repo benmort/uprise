@@ -1,4 +1,5 @@
 import { GeoController } from "./geo.controller";
+import { GeoTilesController } from "./geo-tiles.controller";
 import type { GeoService } from "./geo.service";
 
 describe("GeoController", () => {
@@ -216,7 +217,7 @@ describe("GeoController", () => {
   it("tile parses coords, sets binary + cache headers, and sends the buffer", async () => {
     const svc = makeSvc();
     (svc.tile as jest.Mock).mockResolvedValue(Buffer.from([1, 2, 3]));
-    const c = new GeoController(svc);
+    const c = new GeoTilesController(svc);
     const res = makeRes();
     await c.tile("sa2", "9", "462", "314", res);
     expect(svc.tile).toHaveBeenCalledWith("sa2", 9, 462, 314, undefined);
@@ -229,7 +230,7 @@ describe("GeoController", () => {
   it("tile answers 204 for an empty tile without sending a body", async () => {
     const svc = makeSvc();
     (svc.tile as jest.Mock).mockResolvedValue(Buffer.alloc(0));
-    const c = new GeoController(svc);
+    const c = new GeoTilesController(svc);
     const res = makeRes();
     await c.tile("mb", "5", "3", "3", res);
     expect(res.status).toHaveBeenCalledWith(204);
@@ -240,7 +241,7 @@ describe("GeoController", () => {
   it("tile forwards a ?metric to the service (ABS value baked on the tile)", async () => {
     const svc = makeSvc();
     (svc.tile as jest.Mock).mockResolvedValue(Buffer.from([9]));
-    const c = new GeoController(svc);
+    const c = new GeoTilesController(svc);
     await c.tile("sa1", "12", "1", "2", makeRes(), "median_age");
     expect(svc.tile).toHaveBeenCalledWith("sa1", 12, 1, 2, "median_age");
   });

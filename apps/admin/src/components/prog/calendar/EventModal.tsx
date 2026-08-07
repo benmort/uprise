@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalContent } from "@uprise/ui";
+import { cn } from "@/lib/utils";
 
 export type EventColor = 'danger' | 'success' | 'primary' | 'warning';
 
@@ -88,7 +89,8 @@ export default function EventModal({ isOpen, onClose, mode, eventData, onSave }:
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} className="max-w-[600px] m-4">
+    <Modal open={isOpen} onOpenChange={(o) => { if (!o) handleClose(); }}>
+      <ModalContent className={cn("p-0", "max-w-[600px] m-4", "bg-surface")}>
       <div className="no-scrollbar relative w-full overflow-y-auto rounded-3xl bg-white p-6 dark:bg-gray-900 lg:p-11">
         <div className="flex flex-col px-2 overflow-y-auto custom-scrollbar">
           {/* Header */}
@@ -211,6 +213,7 @@ export default function EventModal({ isOpen, onClose, mode, eventData, onSave }:
           </div>
         </div>
       </div>
+    </ModalContent>
     </Modal>
   );
 }

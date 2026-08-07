@@ -8,9 +8,33 @@ import { auth, loginRedirectUrl, type AuthPrincipal } from "@uprise/api-client";
  * these read the current principal from /auth/check and bounce to the auth app when
  * there's no valid session.
  */
-export async function getSession(): Promise<AuthPrincipal | null> {
+
+/** The three honest answers a session check can give. `unreachable` is the one a naive
+ *  null conflates with signed-out: the network/API failed, so we DON'T know — a field
+ *  volunteer on patchy mobile data must not be bounced to sign-in over a dropped packet. */
+export type SessionProbe =
+  | { state: "authed"; user: AuthPrincipal }
+  | { state: "signed-out" }
+  | { state: "unreachable"; error: string };
+
+export async function probeSession(): Promise<SessionProbe> {
   const res = await auth.checkSession();
-  return res.ok ? res.data.user : null;
+  if (res.ok) {
+    return res.data.user ? { state: "authed", user: res.data.user } : { state: "signed-out" };
+  }
+  // Only a definitive auth answer means signed-out; anything else (network failure,
+  // timeout, 5xx) is the API being unreachable, not the session being invalid.
+  return res.status === 401 || res.status === 403
+    ? { state: "signed-out" }
+    : { state: "unreachable", error: res.error };
+}
+
+/** The simple read most callers want: the principal, or null when there's no usable
+ *  session answer. Prefer `probeSession()` anywhere the unreachable case must not be
+ *  treated as signed-out (e.g. the shell's login bounce). */
+export async function getSession(): Promise<AuthPrincipal | null> {
+  const probe = await probeSession();
+  return probe.state === "authed" ? probe.user : null;
 }
 
 /** Send the user to the auth app, preserving where they were headed. The field app sets

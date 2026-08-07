@@ -8,14 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
-import { Spinner } from "@uprise/ui";
+import { Spinner, MicroLabel, DataTable, ListFooter } from "@uprise/ui";
 import { importSummaryLine, reasonRowsFromStats, type SyncRunStats } from "@/lib/sync-health";
+import { PageHeader } from "@/components/shell/page-header";
 
 type AudienceDetail = {
   id: string;
@@ -156,18 +156,16 @@ export default function AudienceShowPage() {
 
   return (
     <div className="page-stack">
-      <Breadcrumbs
-        items={[
+      <PageHeader
+        title={audience?.name || "Audience Details"}
+        description={`Audience ID: ${id}`}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
           { label: "Audience", href: "/audience" },
           { label: audience?.name || "Audience Details" },
         ]}
-      />
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold">{audience?.name || "Audience Details"}</h1>
-          <p className="text-sm text-muted-foreground">Audience ID: {id}</p>
-        </div>
-        <div className="flex items-center gap-2">
+        actions={
+          <>
           <Button
             variant="destructive"
             size="sm"
@@ -179,8 +177,9 @@ export default function AudienceShowPage() {
           <Button asChild variant="outline" size="sm">
             <Link href="/audience">Back to Audiences</Link>
           </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {error && (
         <Card>
@@ -216,9 +215,7 @@ export default function AudienceShowPage() {
                 value={skippedTotal.toLocaleString()}
               />
               <div className="md:col-span-3">
-                <p className="text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
-                  Status
-                </p>
+                <MicroLabel as="p">Status</MicroLabel>
                 <div className="mt-2">
                   <StatusBadge status={audience.status} />
                 </div>
@@ -321,55 +318,45 @@ export default function AudienceShowPage() {
               {loading && audience ? (
                 <p className="text-xs text-muted-foreground">Loading…</p>
               ) : null}
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
-                      <th className="py-2 pr-4">Name</th>
-                      <th className="py-2 pr-4">Phone</th>
-                      <th className="py-2 pr-4">Contactable</th>
-                      <th className="py-2 pr-4">Source</th>
-                      <th className="py-2 pr-4">Added</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {contacts.map((contact) => (
-                      <tr key={contact.id} className="border-b border-border/70">
-                        <td className="py-3 pr-4">{contact.fullName || "—"}</td>
-                        <td className="py-3 pr-4">{contact.phoneE164.startsWith("__noncontactable__") ? "—" : contact.phoneE164}</td>
-                        <td className="py-3 pr-4">
-                          {contact.metadata?.contactable === false ? "No" : "Yes"}
-                        </td>
-                        <td className="py-3 pr-4">{contact.source || "—"}</td>
-                        <td className="py-3 pr-4 text-muted-foreground">
-                          {contact.createdAt
-                            ? new Date(contact.createdAt).toLocaleString()
-                            : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                    {contacts.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="py-6 text-center text-muted-foreground">
-                          No contacts found for this audience yet.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">
-                  Showing {contacts.length} of {contactsTotal} contacts
-                </p>
-                <PaginationControls
-                  page={page}
-                  pageSize={pageSize}
-                  total={contactsTotal}
-                  onPrev={() => setPage((p) => Math.max(0, p - 1))}
-                  onNext={() => setPage((p) => p + 1)}
-                />
-              </div>
+              <DataTable
+                aria-label="Audience contacts"
+                rows={contacts}
+                rowKey={(contact) => contact.id}
+                pageSize={0}
+                empty="No contacts found for this audience yet."
+                columns={[
+                  { key: "name", header: "Name", cell: (contact) => contact.fullName || "—" },
+                  {
+                    key: "phone",
+                    header: "Phone",
+                    cell: (contact) => (contact.phoneE164.startsWith("__noncontactable__") ? "—" : contact.phoneE164),
+                  },
+                  {
+                    key: "contactable",
+                    header: "Contactable",
+                    cell: (contact) => (contact.metadata?.contactable === false ? "No" : "Yes"),
+                  },
+                  { key: "source", header: "Source", cell: (contact) => contact.source || "—" },
+                  {
+                    key: "added",
+                    header: "Added",
+                    cell: (contact) => (
+                      <span className="text-muted-foreground">
+                        {contact.createdAt ? new Date(contact.createdAt).toLocaleString() : "—"}
+                      </span>
+                    ),
+                  },
+                ]}
+              />
+              <ListFooter
+                shown={contacts.length}
+                total={contactsTotal}
+                noun="contacts"
+                page={page}
+                pageSize={pageSize}
+                onPrev={() => setPage((p) => Math.max(0, p - 1))}
+                onNext={() => setPage((p) => p + 1)}
+              />
             </>
           )}
         </CardContent>
@@ -411,7 +398,7 @@ export default function AudienceShowPage() {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+      <MicroLabel as="p">{label}</MicroLabel>
       <p className="mt-2 text-sm">{value}</p>
     </div>
   );

@@ -476,7 +476,7 @@ export function FloatingTourCard() {
           {/* Stage bar — only on staged tours. Doubles as the presenter's running order: which
               section we're in, how long it should take, and a jump list to re-cut on the fly. */}
           {currentStage ? (
-            <div className="border-b border-[hsl(var(--border))] bg-primary/5">
+            <div className="border-b border-border bg-primary/5">
               <button
                 type="button"
                 onClick={() => setStagesOpen((o) => !o)}
@@ -498,7 +498,7 @@ export function FloatingTourCard() {
                 <ChevronsUpDown className="h-3 w-3 shrink-0 text-muted-foreground" />
               </button>
               {stagesOpen ? (
-                <div className="max-h-52 overflow-y-auto border-t border-[hsl(var(--border))] bg-background py-1">
+                <div className="max-h-52 overflow-y-auto border-t border-border bg-background py-1">
                   {stages.map((stage, i) => {
                     const StageIcon = stage.icon;
                     const isCurrent = stage.id === currentStage.id;
@@ -564,7 +564,7 @@ export function FloatingTourCard() {
             <p className="px-4 text-[13px] font-medium leading-snug text-foreground">{step.content}</p>
             {step.detail ? (
               <>
-                <hr className="mx-4 my-2.5 border-t border-[hsl(var(--border))]" />
+                <hr className="mx-4 my-2.5 border-t border-border" />
                 <p className="px-4 pb-3 text-xs leading-relaxed text-muted-foreground">{step.detail}</p>
               </>
             ) : (

@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Layers, Map as MapIcon } from "lucide-react";
 import { SearchInput } from "@/components/ui/search-input";
-import { PageHeader } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/shell/page-header";
 import { WalkModeToggle, type WalkMode } from "@uprise/field";
 import { cn } from "@/lib/utils";
 import { STATE_ABBREVS } from "@/lib/canvass/states";

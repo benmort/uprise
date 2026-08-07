@@ -5,6 +5,7 @@ import { MailOpen, ShieldCheck } from "lucide-react";
 import { KpiTile, SectionCard } from "@uprise/field";
 import { StatusBadge } from "@uprise/ui";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/shell/page-header";
 
 /**
  * Email channel overview — MOCK page mirroring /channels/text while the email
@@ -73,19 +74,15 @@ export default function EmailChannelPage() {
 
   return (
     <div className="page-stack">
-      <div className="section-stack">
-        <div className="flex flex-wrap items-center gap-3">
-          <div>
-            <h1 className="text-3xl font-semibold">Email</h1>
-            <p className="text-sm text-muted-foreground">
-              Your email campaigns, deliverability and compliance in one place.
-            </p>
-          </div>
+      <PageHeader
+        title="Email"
+        description="Your email campaigns, deliverability and compliance in one place."
+        titleAccessory={
           <span className="rounded-full bg-surface-variant px-2.5 py-1 text-xs font-bold uppercase text-muted-foreground">
             Sample data
           </span>
-        </div>
-      </div>
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiTile label="Email blasts" value={kpis.blasts.toLocaleString()} />
@@ -105,11 +102,11 @@ export default function EmailChannelPage() {
       >
         <ul className="space-y-1.5 text-sm text-muted-foreground">
           <li className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-[hsl(var(--success))]" />
+            <ShieldCheck className="h-4 w-4 text-success" />
             An unsubscribe link is added to every marketing email and honoured automatically.
           </li>
           <li className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-[hsl(var(--success))]" />
+            <ShieldCheck className="h-4 w-4 text-success" />
             Sends go from <span className="mx-1 font-mono text-foreground">info@uprise.org.au</span>
             — per-organisation sender addresses are coming soon.
           </li>

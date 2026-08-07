@@ -15,7 +15,7 @@ import { useTextingFlow, useTextingQueue, useTextingThread } from "../hooks/use-
 import { CannedResponsePicker } from "../components/canned-response-picker";
 import { ScriptAssistPanel } from "../components/script-assist-panel";
 import { SurveyRunner, type SurveyAnswer, type SurveySchema } from "../components/survey-runner";
-import { ProgressBar } from "../components/progress-bar";
+import { ProgressBar } from "@uprise/ui";
 
 type SurveyLike = {
   id: string;

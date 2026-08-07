@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
+import { RefreshButton } from "@uprise/ui";
 import {
   getObservabilityLogs,
   getObservabilityQueueJobs,
@@ -93,7 +94,7 @@ export default function PlatformLogsPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold">
+          <h1 className="flex items-center gap-2 text-2xl font-extrabold">
             <ScrollText className="h-6 w-6" aria-hidden />
             Platform logs
           </h1>
@@ -102,10 +103,7 @@ export default function PlatformLogsPage() {
             queue job detail — across the whole estate.
           </p>
         </div>
-        <Button variant="secondary" size="sm" disabled={loading} onClick={() => void refresh({ notifyOnError: true })}>
-          <RefreshCw className="mr-2 h-4 w-4" aria-hidden />
-          Refresh
-        </Button>
+        <RefreshButton variant="secondary" refreshing={loading} onClick={() => void refresh({ notifyOnError: true })} />
       </div>
 
       <Card>

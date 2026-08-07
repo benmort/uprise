@@ -121,6 +121,42 @@ describe("request() transport wrapper", () => {
     expect(res).toEqual({ ok: false, error: "Request failed (500)", status: 500 });
   });
 
+  // The API expresses "accepted, still computing" by throwing ApiHttpException(…, 202): a SUCCESS
+  // status carrying an {error:{…}} body. Treated as success, the bare-payload fallback handed that
+  // envelope back as the payload, and the targeting map read `.meta.queued` off it and took the
+  // page down through the error boundary.
+  it("treats a 2xx carrying an error envelope as a failure, not a payload", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 202,
+      json: async () => ({ error: { code: "HEAT_QUEUED", message: "being computed in the background" } }),
+    });
+    const res = await request("/canvass/campaigns/c1/heat");
+    expect(res).toEqual({
+      ok: false,
+      error: "being computed in the background",
+      status: 202,
+    });
+  });
+
+  it("still returns a bare payload when the 2xx body is not an envelope", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => [{ id: "a" }] });
+    await expect(request("/bare-array")).resolves.toEqual({ ok: true, data: [{ id: "a" }] });
+
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ id: "a" }) });
+    await expect(request("/bare-object")).resolves.toEqual({ ok: true, data: { id: "a" } });
+  });
+
+  // An envelope carrying BOTH is a success that merely mentions an error field.
+  it("prefers data when a 2xx body has both data and error", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { ok: 1 }, error: null }),
+    });
+    await expect(request("/both")).resolves.toEqual({ ok: true, data: { ok: 1 } });
+  });
+
   it("flags a fetch rejection as a network error, with no status", async () => {
     fetchMock.mockRejectedValueOnce(new Error("Failed to fetch"));
     const res = await request("/down");

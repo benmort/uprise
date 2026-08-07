@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentProps } from "react";
+import { useEffect, useRef, type ComponentProps } from "react";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,9 @@ type SearchInputProps = Omit<ComponentProps<typeof Input>, "value" | "onChange">
   onClear?: () => void;
   /** Class for the relative wrapper (width/flex), vs `className` on the input itself. */
   wrapperClassName?: string;
+  /** A document-level shortcut (e.g. `"/"`) that focuses this field — ignored while the
+   *  user is typing in another input/textarea/contenteditable. */
+  focusKey?: string;
 };
 
 /**
@@ -29,13 +32,31 @@ export function SearchInput({
   onValueChange,
   onClear,
   wrapperClassName,
+  focusKey,
   className,
   ...props
 }: SearchInputProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!focusKey) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== focusKey || e.metaKey || e.ctrlKey || e.altKey) return;
+      // Never steal the key from a field the user is already typing in.
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      e.preventDefault();
+      inputRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [focusKey]);
+
   return (
     <div className={cn("relative min-w-[220px]", wrapperClassName)}>
       <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
+        ref={inputRef}
         value={value}
         onChange={(e) => onValueChange(e.target.value)}
         className={cn("h-9 pl-8", value && "pr-8", className)}

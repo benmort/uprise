@@ -5,21 +5,21 @@ import type { LucideIcon } from "lucide-react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { tenants as tenantsApi } from "@uprise/api-client";
 import { useApi } from "@/lib/use-api";
-import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { PageHeader } from "@/components/shell/page-header";
 import { SuperTenantSwitcher } from "@/components/super/tenant-switcher";
 import { TenantTabs } from "@/components/super/tenant-tabs";
 
 /**
  * Shared header for the super-admin tenant-scoped sub-pages (Overview / Members / Email /
- * Telephony / Feature flags). The canvass `CampaignPageHeader`, re-skinned for tenants: a
- * breadcrumb trail (Tenants › <title>) then a title row with the tenant switcher INLINE beside
- * the title + an optional actions slot. The switcher swaps the `[tenantId]` path segment in
- * place (URL is the source of truth); the tenant list is fetched through the cached `useApi`
- * (shared with the sidebar), so moving between sub-pages doesn't refetch.
+ * Telephony / Feature flags): the unified `PageHeader` with the tenant switcher in the
+ * `titleAccessory` slot, a `Tenants › <title>` trail and the tab bar as the trailing row.
+ * The switcher swaps the `[tenantId]` path segment in place (URL is the source of truth);
+ * the tenant list is fetched through the cached `useApi` (shared with the sidebar), so
+ * moving between sub-pages doesn't refetch.
  */
 export function TenantPageHeader({
   title,
-  icon: Icon,
+  icon,
   description,
   actions,
 }: {
@@ -44,24 +44,19 @@ export function TenantPageHeader({
   };
 
   return (
-    <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            {Icon ? <Icon className="h-6 w-6 shrink-0 text-primary" /> : null}
-            <h1 className="text-2xl font-extrabold">{title}</h1>
-          </div>
-          {tenants.length > 0 ? (
-            <SuperTenantSwitcher tenants={tenants} activeId={tenantId ?? ""} onSelect={switchTo} />
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
-          <Breadcrumbs className="ml-auto" items={[{ label: "Tenants", href: "/super/tenants" }, { label: title }]} />
-        </div>
-      </div>
-      {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+    <PageHeader
+      icon={icon}
+      title={title}
+      description={description}
+      actions={actions}
+      breadcrumbs={[{ label: "Tenants", href: "/super/tenants" }, { label: title }]}
+      titleAccessory={
+        tenants.length > 0 ? (
+          <SuperTenantSwitcher tenants={tenants} activeId={tenantId ?? ""} onSelect={switchTo} />
+        ) : null
+      }
+    >
       <TenantTabs />
-    </>
+    </PageHeader>
   );
 }

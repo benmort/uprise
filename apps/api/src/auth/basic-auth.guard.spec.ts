@@ -500,3 +500,73 @@ describe("BasicAuthGuard session auth", () => {
     expect(request.user.tenantId).toBe("t-session");
   });
 });
+
+// ── Tiles: signed-in, but resolved cheaply (see isStaticTilePath) ──
+describe("BasicAuthGuard static tile path", () => {
+  const config = { get: () => undefined } as unknown as ConfigService;
+  const ctx = (request: any): ExecutionContext =>
+    ({ switchToHttp: () => ({ getRequest: () => request }) }) as unknown as ExecutionContext;
+  const tileRequest = (over: any = {}) => ({
+    path: "/api/v1/geo/tiles/sa1/9/472/305",
+    originalUrl: "/api/v1/geo/tiles/sa1/9/472/305?metric=median_age",
+    headers: { cookie: "auth_token=tok" },
+    ...over,
+  });
+
+  // The whole point: a tile must not pay for the three-query principal build.
+  it("uses the cheap resolve, never the full one", async () => {
+    const sessions = {
+      resolveLight: jest.fn().mockResolvedValue({ userId: "u1" }),
+      resolve: jest.fn(),
+    } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions);
+    const request: any = tileRequest();
+    await expect(guard.canActivate(ctx(request))).resolves.toBe(true);
+    expect(sessions.resolveLight).toHaveBeenCalledWith("tok");
+    expect(sessions.resolve).not.toHaveBeenCalled();
+  });
+
+  // A principal that could satisfy @Roles would be a hole, not a convenience.
+  it("attaches a principal with no role and no tenant", async () => {
+    const sessions = {
+      resolveLight: jest.fn().mockResolvedValue({ userId: "u1" }),
+      resolve: jest.fn(),
+    } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions);
+    const request: any = tileRequest();
+    await guard.canActivate(ctx(request));
+    expect(request.user.id).toBe("u1");
+    expect(request.user.role).toBeUndefined();
+    expect(request.user.tenantId).toBeUndefined();
+    expect(request.user.isSuperAdmin).toBeFalsy();
+  });
+
+  // Cheap is not the same as open.
+  it("still refuses a request with no valid session", async () => {
+    const sessions = { resolveLight: jest.fn().mockResolvedValue(null), resolve: jest.fn() } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions);
+    await expect(guard.canActivate(ctx(tileRequest()))).rejects.toThrow();
+  });
+
+  it("refuses a tile request carrying no token at all", async () => {
+    const sessions = { resolveLight: jest.fn().mockResolvedValue(null), resolve: jest.fn() } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions);
+    await expect(guard.canActivate(ctx(tileRequest({ headers: {} })))).rejects.toThrow();
+  });
+
+  // Only tiles take this path — a neighbouring geo route keeps the full principal build.
+  it("does not apply to other geo routes", async () => {
+    const sessions = {
+      resolveLight: jest.fn(),
+      resolve: jest.fn().mockResolvedValue({ userId: "u1", email: "a@b.c", tenantId: "t1", role: "ORGANISER" }),
+    } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions);
+    const request: any = tileRequest({
+      path: "/api/v1/geo/areas",
+      originalUrl: "/api/v1/geo/areas?kind=sa1",
+    });
+    await guard.canActivate(ctx(request));
+    expect(sessions.resolveLight).not.toHaveBeenCalled();
+    expect(sessions.resolve).toHaveBeenCalled();
+  });
+});

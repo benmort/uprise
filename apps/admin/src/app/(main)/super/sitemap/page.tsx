@@ -5,7 +5,7 @@ import { ChevronRight, ExternalLink, LayoutGrid, ListTree, Network } from "lucid
 import type { AuthPrincipal } from "@uprise/api-client";
 import { Spinner } from "@uprise/ui";
 import { getSession } from "@/lib/session";
-import { PageHeader } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/shell/page-header";
 import { SearchInput } from "@/components/ui/search-input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { EmptyState } from "@/components/ui/empty-state";

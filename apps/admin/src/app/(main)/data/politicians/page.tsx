@@ -24,6 +24,7 @@ import { DataTable } from "@uprise/field";
 import { MemberAvatar } from "@/components/civic/member-avatar";
 import { DataExplorerTabs } from "@/components/data/data-explorer-tabs";
 import { cn } from "@/lib/utils";
+import { CHAMBER_COLOURS, JURISDICTION_COLOURS } from "@/lib/party-colours";
 
 type ChamberFilter = "all" | "LOWER" | "UPPER";
 const CHAMBERS: Array<{ key: ChamberFilter; label: string }> = [
@@ -32,20 +33,6 @@ const CHAMBERS: Array<{ key: ChamberFilter; label: string }> = [
   { key: "UPPER", label: "Upper" },
 ];
 
-// Coloured chips: one hue per jurisdiction + chamber. Medium-bright hues so the tinted chip
-// stays legible in light and dark mode (background = the colour at ~12%, text = the colour).
-const JURISDICTION_COLOURS: Record<string, string> = {
-  FEDERAL: "#4f46e5",
-  NSW: "#0891b2",
-  VIC: "#2563eb",
-  QLD: "#be123c",
-  SA: "#dc2626",
-  WA: "#d97706",
-  TAS: "#16a34a",
-  ACT: "#db2777",
-  NT: "#ea580c",
-};
-const CHAMBER_COLOURS: Record<string, string> = { LOWER: "#0d9488", UPPER: "#7c3aed" };
 
 function ColourChip({ label, colour }: { label: string; colour?: string }) {
   if (!colour) {

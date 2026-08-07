@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, Minus, Plus } from "lucide-react";
 import { Button, cn, useLocalStorage } from "@uprise/ui";
-import { SectionCard } from "../components/section-card";
-import { KpiTile } from "../components/kpi-tile";
+import { SectionCard } from "@uprise/ui";
+import { KpiTile } from "@uprise/ui";
 import {
   buildTurf,
   DENSITY_PRESETS,

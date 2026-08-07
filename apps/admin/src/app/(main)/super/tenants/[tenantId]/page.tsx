@@ -11,6 +11,7 @@ import { Input } from '@uprise/ui';
 import { Label } from "@uprise/ui";
 import { getSession } from '@/lib/session';
 import { TenantPageHeader } from '@/components/super/tenant-page-header';
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const STATUS_OPTIONS: { value: TenantStatus; label: string }[] = [
   { value: 'ACTIVE', label: 'Active' },
@@ -32,6 +33,7 @@ export default function TenantDetailPage() {
   const [status, setStatus] = useState<TenantStatus>('ACTIVE');
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isSuperAdmin = principal?.isSuperAdmin === true;
 
@@ -75,7 +77,6 @@ export default function TenantDetailPage() {
 
   const remove = async () => {
     if (saving || !tenant) return;
-    if (!window.confirm(`Delete tenant "${tenant.name}"?`)) return;
     setSaving(true);
     setActionError(null);
     const res = await tenantsApi.remove(tenant.id);
@@ -111,7 +112,7 @@ export default function TenantDetailPage() {
         description="The tenant's identity, lifecycle status and plan."
         actions={
           isSuperAdmin ? (
-            <Button variant="outline" className="text-red-600 dark:text-red-400" onClick={() => void remove()} disabled={saving}>
+            <Button variant="outline" className="text-red-600 dark:text-red-400" onClick={() => setConfirmDelete(true)} disabled={saving}>
               <Trash2 className="h-4 w-4 mr-2" /> Delete tenant
             </Button>
           ) : null
@@ -180,6 +181,19 @@ export default function TenantDetailPage() {
           </CardContent>
         </Card>
       </div>
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete tenant?"
+        description={`Delete tenant "${tenant?.name ?? ""}"? This soft-deletes it and its access.`}
+        confirmLabel="Delete tenant"
+        busy={saving}
+        busyLabel="Deleting…"
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          void remove();
+        }}
+      />
     </div>
   );
 }

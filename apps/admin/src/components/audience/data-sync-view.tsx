@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EntityRow } from "@uprise/ui";
 import { listIntegrationConnections, type IntegrationConnectionRow } from "@/lib/api";
 import { providerLabel } from "@/lib/integration-sources";
 import { PullListCard } from "@/components/audience/pull-list-card";
@@ -129,21 +130,12 @@ export function DataSyncView() {
         </CardHeader>
         <CardContent className="space-y-2">
           {connections.map((c) => (
-            <div
+            <EntityRow
               key={c.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">
-                  {c.name}
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {providerLabel(c.type)}
-                    {c.group ? ` · ${c.group}` : ""}
-                  </span>
-                </p>
-              </div>
-              <StatusBadge status={c.status} />
-            </div>
+              title={c.name}
+              meta={`${providerLabel(c.type)}${c.group ? ` · ${c.group}` : ""}`}
+              trailing={<StatusBadge status={c.status} />}
+            />
           ))}
           <p className="pt-1 text-xs text-muted-foreground">
             Tokens and advanced options (white-label domains, disconnecting) live in{" "}
