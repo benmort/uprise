@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   AudienceChannel,
@@ -14,7 +15,11 @@ import {
 import { parse } from "csv-parse/sync";
 import { PrismaService } from "../prisma/prisma.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
-import { sanitizeMetadata, withDefaultContactable } from "../common/utils/metadata.utils";
+import {
+  sanitizeMetadata,
+  withDefaultContactable,
+  type MetadataRecord,
+} from "../common/utils/metadata.utils";
 import { ConfigService } from "@nestjs/config";
 import { CreateAudienceDto, ListAudiencesDto } from "./dto/audience.dto";
 import { FeatureFlagsService } from "../common/flags/feature-flags.service";
@@ -30,6 +35,13 @@ import { AudienceImportBatchJobPayload } from "../common/queue/queue.payloads";
 import { ContactsService } from "../contacts/contacts.service";
 
 type CsvRow = Record<string, string | undefined>;
+/** A CSV row that normalised cleanly – what the import writers actually persist. */
+type PreparedImportRow = {
+  rowNumber: number;
+  phoneE164: string;
+  fullName: string | null;
+  metadata: MetadataRecord;
+};
 /** The narrow AudienceContact projection the CSV export reads (+ its keyset columns). */
 type ExportRow = {
   id: string;
@@ -229,6 +241,10 @@ export class AudiencesService {
 
   /** Keyset page size for the CSV export walk. */
   private static readonly EXPORT_PAGE_SIZE = 1000;
+
+  /** Rows per import write. Big enough to amortise the round trips, small enough
+   *  that one poison row only costs a chunk's worth of row-at-a-time replay. */
+  private static readonly IMPORT_CHUNK_SIZE = 500;
 
   /** Provenance source-system key for an audience source — matches what the import
    *  writes to ContactSourceRecord (see IntegrationsService.sourceSystemFor). */
@@ -569,6 +585,168 @@ export class AudiencesService {
     return this.mapImportProgress(job);
   }
 
+  /**
+   * Normalise one CSV row into what the writers need, or the error to report against
+   * it. Shared by the chunk path and the row-at-a-time fallback so a row is judged
+   * identically either way.
+   */
+  private prepareImportRow(row: CsvRow, rowNumber: number): PreparedImportRow | ImportErrorRow {
+    const phoneRaw = row.phone || row.phone_number || row.mobile;
+    if (!phoneRaw) return { row: rowNumber, message: "Missing phone" };
+    try {
+      return {
+        rowNumber,
+        phoneE164: normalizePhoneE164(phoneRaw),
+        fullName: row.name || row.full_name || row.first_name || null,
+        metadata: withDefaultContactable(sanitizeMetadata(row)),
+      };
+    } catch (error) {
+      return { row: rowNumber, message: String(error) };
+    }
+  }
+
+  /**
+   * Write one chunk of CSV rows in a fixed number of queries, falling back to the
+   * row-at-a-time path if the set write fails.
+   *
+   * The old shape was two round trips per row – resolve the Contact, upsert the
+   * AudienceContact – which is what made a 100k-row import an hours-long job. A
+   * chunk now costs a handful of queries no matter how many rows are in it.
+   *
+   * The fallback is what keeps per-row error reporting honest: a set write can only
+   * tell us the whole statement failed, so when one does we replay the chunk one row
+   * at a time and let each bad row name itself. Chunks are small enough that this is
+   * cheap, and the common case never pays for it.
+   */
+  private async writeImportChunk(
+    job: { id: string; tenantId: string; audienceId: string },
+    chunk: CsvRow[],
+    firstRowNumber: number,
+  ): Promise<{ imported: number; failed: number; errors: ImportErrorRow[] }> {
+    const errors: ImportErrorRow[] = [];
+    const prepared: PreparedImportRow[] = [];
+    chunk.forEach((row, i) => {
+      const outcome = this.prepareImportRow(row, firstRowNumber + i);
+      if ("message" in outcome) errors.push(outcome);
+      else prepared.push(outcome);
+    });
+    if (prepared.length === 0) return { imported: 0, failed: errors.length, errors };
+
+    // A phone repeated inside the chunk collapses to its LAST row – the same result
+    // the row-at-a-time upsert produced, where each later write overwrote the earlier.
+    const byPhone = new Map<string, PreparedImportRow>();
+    for (const p of prepared) byPhone.set(p.phoneE164, p);
+    const writes = [...byPhone.values()];
+
+    try {
+      const contactIds = this.contacts
+        ? await this.contacts.getOrCreateManyByPhone(
+            job.tenantId,
+            writes.map((w) => ({ phoneE164: w.phoneE164, seed: { fullName: w.fullName } })),
+          )
+        : new Map<string, string>();
+      await this.upsertAudienceContacts(job, writes, contactIds);
+      // Every prepared row counts as imported, including ones a later duplicate
+      // superseded – the row-at-a-time path counted each of those too.
+      return { imported: prepared.length, failed: errors.length, errors };
+    } catch (error) {
+      this.logger.warn(
+        `Audience import chunk failed, replaying row-at-a-time for per-row errors (importId=${job.id}, rows=${firstRowNumber}-${firstRowNumber + chunk.length - 1}): ${String(error)}`,
+      );
+      const replay = await this.writeImportRowsIndividually(job, prepared);
+      return {
+        imported: replay.imported,
+        failed: errors.length + replay.failed,
+        errors: [...errors, ...replay.errors],
+      };
+    }
+  }
+
+  /**
+   * One multi-row `INSERT … ON CONFLICT DO UPDATE` for the chunk's AudienceContacts.
+   *
+   * `unnest` of parallel arrays is what makes it a single statement while keeping
+   * per-row values: `createMany` + `updateMany` cannot express "each row gets its
+   * own name and metadata". `contactId` is COALESCEd on update so an unresolved
+   * contact leaves an existing link alone, matching the old upsert, where an
+   * `undefined` contactId meant "do not change".
+   */
+  private async upsertAudienceContacts(
+    job: { tenantId: string; audienceId: string },
+    writes: PreparedImportRow[],
+    contactIds: Map<string, string>,
+  ): Promise<void> {
+    const ids = writes.map(() => randomUUID());
+    const phones = writes.map((w) => w.phoneE164);
+    const linked = writes.map((w) => contactIds.get(w.phoneE164) ?? null);
+    const names = writes.map((w) => w.fullName);
+    const metadata = writes.map((w) => JSON.stringify(w.metadata));
+
+    await this.prisma.$executeRaw(Prisma.sql`
+      INSERT INTO audience."AudienceContact" (
+        "id", "tenantId", "audienceId", "contactId", "phoneE164",
+        "fullName", "metadata", "source", "createdAt", "updatedAt"
+      )
+      SELECT r."id", ${job.tenantId}, ${job.audienceId}, r."contactId", r."phoneE164",
+             r."fullName", r."metadata"::jsonb,
+             ${AudienceSource.CSV}::audience."AudienceSource", now(), now()
+        FROM unnest(
+               ${ids}::text[], ${phones}::text[], ${linked}::text[],
+               ${names}::text[], ${metadata}::text[]
+             ) AS r("id", "phoneE164", "contactId", "fullName", "metadata")
+      ON CONFLICT ("audienceId", "phoneE164") DO UPDATE
+         SET "contactId" = COALESCE(EXCLUDED."contactId", audience."AudienceContact"."contactId"),
+             "fullName"  = EXCLUDED."fullName",
+             "metadata"  = EXCLUDED."metadata",
+             "source"    = EXCLUDED."source",
+             "updatedAt" = now()
+    `);
+  }
+
+  /** The original row-at-a-time write, kept as the fallback that names bad rows. */
+  private async writeImportRowsIndividually(
+    job: { tenantId: string; audienceId: string },
+    prepared: PreparedImportRow[],
+  ): Promise<{ imported: number; failed: number; errors: ImportErrorRow[] }> {
+    let imported = 0;
+    let failed = 0;
+    const errors: ImportErrorRow[] = [];
+    for (const p of prepared) {
+      try {
+        const contact = this.contacts
+          ? await this.contacts.getOrCreateByPhone(job.tenantId, p.phoneE164, {
+              fullName: p.fullName,
+            })
+          : null;
+        await this.prisma.audienceContact.upsert({
+          where: {
+            audienceId_phoneE164: { audienceId: job.audienceId, phoneE164: p.phoneE164 },
+          },
+          update: {
+            contactId: contact?.id,
+            fullName: p.fullName,
+            metadata: p.metadata,
+            source: AudienceSource.CSV,
+          },
+          create: {
+            tenantId: job.tenantId,
+            audienceId: job.audienceId,
+            contactId: contact?.id,
+            phoneE164: p.phoneE164,
+            fullName: p.fullName,
+            metadata: p.metadata,
+            source: AudienceSource.CSV,
+          },
+        });
+        imported += 1;
+      } catch (error) {
+        errors.push({ row: p.rowNumber, message: String(error) });
+        failed += 1;
+      }
+    }
+    return { imported, failed, errors };
+  }
+
   async processImportBatch(importId: string, requestedBatchSize?: number) {
     const job = await this.prisma.audienceImport.findFirst({
       where: {
@@ -633,53 +811,21 @@ export class AudiencesService {
         );
         break;
       }
-      const row = rows[cursor];
-      const rowNumber = cursor + 1;
-      const phoneRaw = row.phone || row.phone_number || row.mobile;
-      if (!phoneRaw) {
-        errorsForBatch.push({ row: rowNumber, message: "Missing phone" });
-        failedDelta += 1;
-        cursor += 1;
-        processedInBatch += 1;
-        continue;
-      }
-      try {
-        const phone = normalizePhoneE164(phoneRaw);
-        const fullName = row.name || row.full_name || row.first_name || null;
-        const metadata = withDefaultContactable(sanitizeMetadata(row));
-        const contact = this.contacts
-          ? await this.contacts.getOrCreateByPhone(job.tenantId, phone, { fullName })
-          : null;
-        await this.prisma.audienceContact.upsert({
-          where: {
-            audienceId_phoneE164: {
-              audienceId: job.audienceId,
-              phoneE164: phone,
-            },
-          },
-          update: {
-            contactId: contact?.id,
-            fullName,
-            metadata,
-            source: AudienceSource.CSV,
-          },
-          create: {
-            tenantId: job.tenantId,
-            audienceId: job.audienceId,
-            contactId: contact?.id,
-            phoneE164: phone,
-            fullName,
-            metadata,
-            source: AudienceSource.CSV,
-          },
-        });
-        importedDelta += 1;
-      } catch (error) {
-        errorsForBatch.push({ row: rowNumber, message: String(error) });
-        failedDelta += 1;
-      }
-      cursor += 1;
-      processedInBatch += 1;
+      const chunkSize = Math.min(
+        AudiencesService.IMPORT_CHUNK_SIZE,
+        batchSize - processedInBatch,
+        rows.length - cursor,
+      );
+      const outcome = await this.writeImportChunk(
+        job,
+        rows.slice(cursor, cursor + chunkSize),
+        cursor + 1,
+      );
+      importedDelta += outcome.imported;
+      failedDelta += outcome.failed;
+      errorsForBatch.push(...outcome.errors);
+      cursor += chunkSize;
+      processedInBatch += chunkSize;
     }
 
     const done = cursor >= rows.length;

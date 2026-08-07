@@ -17,6 +17,8 @@ describe("ContactsService", () => {
       contact: {
         findFirst: jest.fn(),
         create: jest.fn(),
+        createMany: jest.fn(async () => ({ count: 0 })),
+        findMany: jest.fn(async () => []),
         update: jest.fn(),
         delete: jest.fn(),
         findUnique: jest.fn(),
@@ -81,6 +83,104 @@ describe("ContactsService", () => {
         where: { id: "c3" },
         data: { firstName: "Edsger" }, // email already set → not overwritten
       });
+    });
+  });
+
+  describe("getOrCreateManyByPhone", () => {
+    it("reuses existing contacts and creates only the missing ones", async () => {
+      prisma.contact.findMany
+        .mockResolvedValueOnce([
+          { id: "c1", phoneE164: "+15550000001", firstName: "Ada", lastName: "Lovelace" },
+        ])
+        .mockResolvedValueOnce([{ id: "c2", phoneE164: "+15550000002" }]);
+
+      const result = await service.getOrCreateManyByPhone("org_1", [
+        { phoneE164: "+15550000001", seed: { fullName: "Ada Lovelace" } },
+        { phoneE164: "+15550000002", seed: { fullName: "Grace Hopper" } },
+      ]);
+
+      expect(result).toEqual(
+        new Map([
+          ["+15550000001", "c1"],
+          ["+15550000002", "c2"],
+        ]),
+      );
+      // Only the phone with no row is created; skipDuplicates absorbs a concurrent writer.
+      expect(prisma.contact.createMany).toHaveBeenCalledWith({
+        data: [
+          { tenantId: "org_1", phoneE164: "+15550000002", firstName: "Grace", lastName: "Hopper" },
+        ],
+        skipDuplicates: true,
+      });
+      // Two reads + one write, whatever the phone count.
+      expect(prisma.contact.findMany).toHaveBeenCalledTimes(2);
+      expect(prisma.contact.create).not.toHaveBeenCalled();
+    });
+
+    it("skips the create round trip entirely when every phone already exists", async () => {
+      prisma.contact.findMany.mockResolvedValueOnce([
+        { id: "c1", phoneE164: "+15550000001", firstName: "Ada", lastName: "Lovelace" },
+      ]);
+
+      const result = await service.getOrCreateManyByPhone("org_1", [
+        { phoneE164: "+15550000001" },
+      ]);
+
+      expect(result.get("+15550000001")).toBe("c1");
+      expect(prisma.contact.createMany).not.toHaveBeenCalled();
+      expect(prisma.contact.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it("back-fills only blank fields on existing contacts, like enrich() does per row", async () => {
+      prisma.contact.findMany.mockResolvedValueOnce([
+        { id: "c1", phoneE164: "+15550000001", firstName: null, lastName: null, email: "a@b.c" },
+        { id: "c2", phoneE164: "+15550000002", firstName: "Grace", lastName: "Hopper" },
+      ]);
+
+      await service.getOrCreateManyByPhone("org_1", [
+        { phoneE164: "+15550000001", seed: { fullName: "Ada Lovelace", email: "new@x.y" } },
+        { phoneE164: "+15550000002", seed: { fullName: "Someone Else" } },
+      ]);
+
+      // c1 gains the missing name but keeps its email; c2 is already named → untouched.
+      expect(prisma.contact.update).toHaveBeenCalledTimes(1);
+      expect(prisma.contact.update).toHaveBeenCalledWith({
+        where: { id: "c1" },
+        data: { firstName: "Ada", lastName: "Lovelace" },
+      });
+    });
+
+    it("collapses a repeated phone to one contact, last seed winning", async () => {
+      prisma.contact.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
+        { id: "c1", phoneE164: "+15550000001" },
+      ]);
+
+      const result = await service.getOrCreateManyByPhone("org_1", [
+        { phoneE164: "+15550000001", seed: { fullName: "Old Name" } },
+        { phoneE164: "+15550000001", seed: { fullName: "New Name" } },
+      ]);
+
+      expect(result.size).toBe(1);
+      expect(prisma.contact.createMany).toHaveBeenCalledWith({
+        data: [
+          { tenantId: "org_1", phoneE164: "+15550000001", firstName: "New", lastName: "Name" },
+        ],
+        skipDuplicates: true,
+      });
+    });
+
+    it("no phones ⇒ no queries", async () => {
+      expect(await service.getOrCreateManyByPhone("org_1", [])).toEqual(new Map());
+      expect(prisma.contact.findMany).not.toHaveBeenCalled();
+      expect(prisma.contact.createMany).not.toHaveBeenCalled();
+    });
+
+    it("omits a phone the re-read still cannot find rather than inventing an id", async () => {
+      prisma.contact.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+      const result = await service.getOrCreateManyByPhone("org_1", [
+        { phoneE164: "+15550000001" },
+      ]);
+      expect(result.size).toBe(0);
     });
   });
 
