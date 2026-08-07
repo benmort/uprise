@@ -4,6 +4,7 @@ import {
   ConsentState,
   JourneyEnrolmentState,
   MessageChannel,
+  Prisma,
   RsvpStatus,
   SupportLevel,
 } from "@uprise/db";
@@ -65,6 +66,25 @@ export interface LeafResolution {
 
 const enumSubset = <T extends string>(values: string[] | undefined, all: readonly T[]): T[] =>
   (values ?? []).filter((v): v is T => (all as readonly string[]).includes(v));
+
+/** A lazily-loaded contact universe, shared by everything in ONE evaluation run. */
+export type ContactUniverse = () => Promise<ReadonlySet<string>>;
+
+/**
+ * Memoise a universe load for the span of a single evaluation run.
+ *
+ * The universe is every contact id in the tenant – a full table read that the
+ * legacy clause language used to re-issue for each `all` clause. Caching the
+ * *promise* (not the settled set) means concurrent callers share the one
+ * in-flight query, and a rejection is not retried mid-run.
+ *
+ * Deliberately per-run, never per-instance: a universe cached across runs would
+ * evaluate later segments against a stale contact roll.
+ */
+export function memoiseUniverse(load: () => Promise<ReadonlySet<string>>): ContactUniverse {
+  let pending: Promise<ReadonlySet<string>> | undefined;
+  return () => (pending ??= load());
+}
 
 /**
  * The I/O host for the segmentation fold — resolves every effective-tree leaf
@@ -164,27 +184,18 @@ export class SegmentLeafResolverService {
       }
 
       // ── contact — spine fields ────────────────────────────────────────
+      // Presence leaves fold `value` and `isNot` into ONE polarity, then let the DB
+      // answer it directly – `IS NULL` instead of universe ∖ (`IS NOT NULL`). Exactly
+      // equivalent because the universe IS the tenant's contact roll, so the
+      // complement of a tenant-scoped positive set is the tenant-scoped negative one.
       case "contact.hasEmail":
       case "contact.hasPhone": {
         const field = condition.type === "contact.hasEmail" ? "email" : "phoneE164";
-        const rows = await this.prisma.contact.findMany({
-          where: { tenantId, [field]: { not: null } },
-          select: { id: true },
-        });
-        const has = new Set(rows.map((r) => r.id));
-        const positive = condition.value ? has : difference(universe, has);
-        return condition.op === "isNot" ? difference(universe, positive) : positive;
+        return this.byPresence(tenantId, field, this.wantsPresent(condition));
       }
-      case "contact.consented": {
+      case "contact.consented":
         // APP 5 consent stamp rolled up onto the contact spine (latest disposition wins).
-        const rows = await this.prisma.contact.findMany({
-          where: { tenantId, consentAt: { not: null } },
-          select: { id: true },
-        });
-        const has = new Set(rows.map((r) => r.id));
-        const positive = condition.value ? has : difference(universe, has);
-        return condition.op === "isNot" ? difference(universe, positive) : positive;
-      }
+        return this.byPresence(tenantId, "consentAt", this.wantsPresent(condition));
       case "contact.emailDomain": {
         const norm = condition.value.trim().replace(/^@/, "").toLowerCase();
         if (!norm) return new Set();
@@ -351,7 +362,7 @@ export class SegmentLeafResolverService {
         return difference(universe, optedOut);
       }
       case "compliance.notSuppressed":
-        return difference(universe, await this.suppressedContacts(tenantId));
+        return this.notSuppressedContacts(tenantId);
       case "compliance.reachable": {
         const rows = await this.prisma.contact.findMany({
           where: { tenantId, phoneE164: { not: null } },
@@ -389,6 +400,28 @@ export class SegmentLeafResolverService {
     }
   }
 
+  /**
+   * The polarity a boolean presence leaf is really asking for: `value` flipped by
+   * `isNot`. `is true` / `isNot false` want the field present; the other two want
+   * it absent.
+   */
+  private wantsPresent(condition: { op: string; value: boolean }): boolean {
+    return condition.op === "isNot" ? !condition.value : condition.value;
+  }
+
+  /** Contacts whose spine field is (or is not) set – a single indexed predicate. */
+  private async byPresence(
+    tenantId: string,
+    field: "email" | "phoneE164" | "consentAt",
+    present: boolean,
+  ): Promise<Set<string>> {
+    const rows = await this.prisma.contact.findMany({
+      where: { tenantId, [field]: present ? { not: null } : null },
+      select: { id: true },
+    });
+    return new Set(rows.map((r) => r.id));
+  }
+
   /** Contacts whose G-NAF address column matches one of the values (raw allowlisted join). */
   private async byGnafColumn(
     tenantId: string,
@@ -423,28 +456,30 @@ export class SegmentLeafResolverService {
 
   /** Any engagement in range: door knock, survey answer, RSVP or inbound reply. */
   private async byAnyActivity(tenantId: string, range: DateRange): Promise<Set<string>> {
-    const [knocks, responses, rsvps, inbound] = [
-      await this.prisma.doorKnock.findMany({
+    // Four independent reads – one leaf, so they fan out together rather than
+    // stacking four round trips (leaves themselves still resolve sequentially).
+    const [knocks, responses, rsvps, inbound] = await Promise.all([
+      this.prisma.doorKnock.findMany({
         where: { tenantId, createdAt: range },
         select: { contactId: true },
         distinct: ["contactId"],
       }),
-      await this.prisma.questionResponse.findMany({
+      this.prisma.questionResponse.findMany({
         where: { tenantId, createdAt: range },
         select: { contactId: true },
         distinct: ["contactId"],
       }),
-      await this.prisma.eventRsvp.findMany({
+      this.prisma.eventRsvp.findMany({
         where: { tenantId, contactId: { not: null }, createdAt: range },
         select: { contactId: true },
         distinct: ["contactId"],
       }),
-      await this.prisma.inboundMessage.findMany({
+      this.prisma.inboundMessage.findMany({
         where: { tenantId, contactId: { not: null }, receivedAt: range },
         select: { contactId: true },
         distinct: ["contactId"],
       }),
-    ];
+    ]);
     const out = new Set<string>();
     for (const r of knocks) out.add(r.contactId);
     for (const r of responses) out.add(r.contactId);
@@ -606,26 +641,37 @@ export class SegmentLeafResolverService {
     return new Set(result.contactIds);
   }
 
-  /** Contacts on the tenant suppression list (matched by phone or email). */
-  private async suppressedContacts(tenantId: string): Promise<Set<string>> {
-    const rows = await this.prisma.suppression.findMany({
-      where: { tenantId },
-      select: { phoneE164: true, email: true },
-    });
-    const phones = rows.map((r) => r.phoneE164).filter((v): v is string => !!v);
-    const emails = rows.map((r) => r.email).filter((v): v is string => !!v);
-    if (phones.length === 0 && emails.length === 0) return new Set();
-    const contacts = await this.prisma.contact.findMany({
-      where: {
-        tenantId,
-        OR: [
-          ...(phones.length ? [{ phoneE164: { in: phones } }] : []),
-          ...(emails.length ? [{ email: { in: emails, mode: "insensitive" as const } }] : []),
-        ],
-      },
-      select: { id: true },
-    });
-    return new Set(contacts.map((c) => c.id));
+  /**
+   * Contacts NOT on the tenant suppression list – one anti-join, no round trip
+   * through the app.
+   *
+   * The old shape read the whole suppression list, then fed the phones and emails
+   * back as two giant `IN` lists to find the suppressed, then complemented them
+   * against the universe in JS. On a tenant with a large opt-out ledger that is a
+   * multi-megabyte parameter list, and the `insensitive` email `IN` could not use
+   * an index anyway. `NOT EXISTS` lets Postgres do it against
+   * `Suppression(tenantId, phoneE164)` / `(tenantId, email)` directly.
+   *
+   * Match semantics are unchanged: a suppression row hits a contact on an exact
+   * phone or a case-insensitive email, and NULLs on either side never match.
+   */
+  private async notSuppressedContacts(tenantId: string): Promise<Set<string>> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT c.id
+        FROM public."Contact" c
+       WHERE c."tenantId" = ${tenantId}
+         AND NOT EXISTS (
+           SELECT 1
+             FROM messaging."Suppression" s
+            WHERE s."tenantId" = ${tenantId}
+              AND (
+                (s."phoneE164" IS NOT NULL AND s."phoneE164" = c."phoneE164")
+                OR (s."email" IS NOT NULL AND c."email" IS NOT NULL
+                    AND lower(s."email") = lower(c."email"))
+              )
+         )
+    `);
+    return new Set(rows.map((r) => r.id));
   }
 
   /** The fatigue mechanic: universe ∖ contacts at/over the send cap in the window. */

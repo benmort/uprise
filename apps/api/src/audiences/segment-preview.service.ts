@@ -13,7 +13,7 @@ import {
   type FilterNode,
 } from "@uprise/segmentation";
 import { PrismaService } from "../prisma/prisma.service";
-import { SegmentLeafResolverService } from "./segment-leaf-resolver.service";
+import { memoiseUniverse, SegmentLeafResolverService } from "./segment-leaf-resolver.service";
 
 export interface PreviewInput {
   filter: FilterNode;
@@ -66,7 +66,10 @@ export class SegmentPreviewService {
       { channel: input.channel ?? "SMS" },
     );
 
-    const universe = await this.leafResolver.universe(tenantId);
+    // One lazily-loaded universe for the whole preview – the three layer-prefix
+    // folds and the `total` all read the same set, fetched at most once.
+    const loadUniverse = memoiseUniverse(() => this.leafResolver.universe(tenantId));
+    const universe = await loadUniverse();
     const { resolved, clauseErrors } = await this.leafResolver.resolveLeaves(
       tenantId,
       collectEffectiveLeaves(composed.tree),

@@ -2,6 +2,7 @@ import { ConsentState, MessageChannel } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { InsightsService } from "../insights/insights.service";
 import { GEO_REGION_COLUMN } from "./geo-columns";
+import { memoiseUniverse, type ContactUniverse } from "./segment-leaf-resolver.service";
 
 type Clause = Record<string, unknown>;
 
@@ -41,25 +42,41 @@ export class LegacyClauseEvaluator {
     return r;
   }
 
-  async resolveMemberIds(tenantId: string, definition: unknown): Promise<Set<string>> {
+  /**
+   * `universe` is the run's shared, lazily-loaded contact roll. A definition can
+   * reach the `all` clause many times over (`{ any: [{...}, { type: 'all' }] }`,
+   * an empty `all` group, any unknown type falling through to the default), and
+   * each one used to re-read every contact id in the tenant. Callers that own a
+   * whole evaluation run pass their memo in; a bare call makes its own so the
+   * once-per-run guarantee holds either way.
+   */
+  async resolveMemberIds(
+    tenantId: string,
+    definition: unknown,
+    universe: ContactUniverse = memoiseUniverse(() => this.allContactIds(tenantId)),
+  ): Promise<ReadonlySet<string>> {
     const clause = this.includeClause(definition);
-    if (!clause) return this.allContactIds(tenantId); // no rule → every contact
-    return this.evalClause(tenantId, clause);
+    if (!clause) return universe(); // no rule → every contact
+    return this.evalClause(tenantId, clause, universe);
   }
 
-  private async evalClause(tenantId: string, clause: Clause): Promise<Set<string>> {
+  private async evalClause(
+    tenantId: string,
+    clause: Clause,
+    universe: ContactUniverse,
+  ): Promise<ReadonlySet<string>> {
     // Combinators. Empty `all` = no constraints = everyone; empty `any` = nobody.
     if (Array.isArray(clause.all)) {
       const children = clause.all as Clause[];
-      if (children.length === 0) return this.allContactIds(tenantId);
-      const sets = await Promise.all(children.map((c) => this.evalClause(tenantId, c)));
+      if (children.length === 0) return universe();
+      const sets = await Promise.all(children.map((c) => this.evalClause(tenantId, c, universe)));
       return sets.reduce((acc, s) => intersect(acc, s));
     }
     if (Array.isArray(clause.any)) {
       const children = clause.any as Clause[];
       if (children.length === 0) return new Set<string>();
-      const sets = await Promise.all(children.map((c) => this.evalClause(tenantId, c)));
-      return sets.reduce((acc, s) => union(acc, s), new Set<string>());
+      const sets = await Promise.all(children.map((c) => this.evalClause(tenantId, c, universe)));
+      return sets.reduce<ReadonlySet<string>>((acc, s) => union(acc, s), new Set<string>());
     }
 
     const type = typeof clause.type === "string" ? clause.type : "all";
@@ -76,7 +93,7 @@ export class LegacyClauseEvaluator {
         return this.byPollThreshold(tenantId, clause);
       case "all":
       default:
-        return this.allContactIds(tenantId);
+        return universe();
     }
   }
 
@@ -175,13 +192,13 @@ export class LegacyClauseEvaluator {
   }
 }
 
-function intersect(a: Set<string>, b: Set<string>): Set<string> {
+function intersect(a: ReadonlySet<string>, b: ReadonlySet<string>): Set<string> {
   const out = new Set<string>();
   for (const x of a) if (b.has(x)) out.add(x);
   return out;
 }
 
-function union(a: Set<string>, b: Set<string>): Set<string> {
+function union(a: ReadonlySet<string>, b: ReadonlySet<string>): Set<string> {
   const out = new Set<string>(a);
   for (const x of b) out.add(x);
   return out;

@@ -30,6 +30,14 @@ import { AudienceImportBatchJobPayload } from "../common/queue/queue.payloads";
 import { ContactsService } from "../contacts/contacts.service";
 
 type CsvRow = Record<string, string | undefined>;
+/** The narrow AudienceContact projection the CSV export reads (+ its keyset columns). */
+type ExportRow = {
+  id: string;
+  createdAt: Date;
+  fullName: string | null;
+  phoneE164: string;
+  metadata: Prisma.JsonValue;
+};
 type ImportErrorRow = { row: number; message: string };
 type AudienceImportProgress = {
   importId: string;
@@ -138,30 +146,52 @@ export class AudiencesService {
     });
   }
 
-  /** How many of an audience's members are actually WhatsApp-reachable (opted in). */
+  /**
+   * How many of an audience's members are actually WhatsApp-reachable (opted in).
+   *
+   * Two integers, so the counting stays in Postgres: the dynamic opt-in audience is
+   * a `COUNT(DISTINCT phone)` over the consent ledger, and a static audience is one
+   * semi-join of its members against that ledger. Previously both sides were pulled
+   * into memory in full and intersected in JS.
+   */
   async whatsappReach(tenantId: string, audienceId: string): Promise<{ total: number; reachable: number }> {
     const audience = await this.prisma.audience.findFirst({
       where: { id: audienceId, tenantId },
     });
     if (!audience) throw new NotFoundException("Audience not found");
 
-    const optedIn = await this.prisma.contactConsent.findMany({
-      where: { tenantId, channel: MessageChannel.WHATSAPP, state: ConsentState.OPTED_IN },
-      select: { phoneE164: true },
-    });
-    const optInSet = new Set(optedIn.map((c) => c.phoneE164));
-
     if (audience.kind === AudienceKind.WHATSAPP_OPTED_IN) {
-      return { total: optInSet.size, reachable: optInSet.size };
+      // Members resolve at send time from the ledger itself – distinct phones, as the
+      // in-memory Set of phone numbers used to be.
+      const [row] = await this.prisma.$queryRaw<Array<{ optedIn: bigint }>>(Prisma.sql`
+        SELECT COUNT(DISTINCT cc."phoneE164") AS "optedIn"
+          FROM messaging."ContactConsent" cc
+         WHERE cc."tenantId" = ${tenantId}
+           AND cc."channel" = ${MessageChannel.WHATSAPP}::messaging."MessageChannel"
+           AND cc."state" = ${ConsentState.OPTED_IN}::messaging."ConsentState"
+      `);
+      const optedIn = Number(row?.optedIn ?? 0);
+      return { total: optedIn, reachable: optedIn };
     }
-    const members = await this.prisma.audienceContact.findMany({
-      where: { audienceId },
-      select: { phoneE164: true },
-    });
-    return {
-      total: members.length,
-      reachable: members.filter((m) => optInSet.has(m.phoneE164)).length,
-    };
+
+    // `total` counts member ROWS (not distinct phones), matching the old
+    // `members.length`; `reachable` is the semi-join against the tenant's opt-ins.
+    const [row] = await this.prisma.$queryRaw<Array<{ total: bigint; reachable: bigint }>>(Prisma.sql`
+      SELECT COUNT(*) AS "total",
+             COUNT(*) FILTER (
+               WHERE EXISTS (
+                 SELECT 1
+                   FROM messaging."ContactConsent" cc
+                  WHERE cc."tenantId" = ${tenantId}
+                    AND cc."channel" = ${MessageChannel.WHATSAPP}::messaging."MessageChannel"
+                    AND cc."state" = ${ConsentState.OPTED_IN}::messaging."ConsentState"
+                    AND cc."phoneE164" = ac."phoneE164"
+               )
+             ) AS "reachable"
+        FROM audience."AudienceContact" ac
+       WHERE ac."audienceId" = ${audienceId}
+    `);
+    return { total: Number(row?.total ?? 0), reachable: Number(row?.reachable ?? 0) };
   }
 
   async listAudiences(tenantId: string, dto: ListAudiencesDto) {
@@ -196,6 +226,9 @@ export class AudiencesService {
 
   /** Reserved name of the default dynamic segment auto-created for an imported audience. */
   private static readonly IMPORT_SEGMENT_NAME = "Imported contacts";
+
+  /** Keyset page size for the CSV export walk. */
+  private static readonly EXPORT_PAGE_SIZE = 1000;
 
   /** Provenance source-system key for an audience source — matches what the import
    *  writes to ContactSourceRecord (see IntegrationsService.sourceSystemFor). */
@@ -813,20 +846,53 @@ export class AudiencesService {
     return { rows, total };
   }
 
+  /**
+   * Export the audience as CSV.
+   *
+   * Read in keyset pages rather than one unbounded `findMany` of full rows: only the
+   * three columns the CSV prints are selected, and each page walks forward from the
+   * last `(createdAt, id)` seen, which the `(audienceId, createdAt)` index serves
+   * directly. `id` is the tiebreak – without it, rows sharing a `createdAt` could
+   * straddle a page boundary and be repeated or skipped.
+   */
   async exportContactsCsv(tenantId: string, audienceId: string): Promise<string> {
     const a = await this.prisma.audience.findFirst({ where: { id: audienceId, tenantId } });
     if (!a) throw new NotFoundException("Audience not found");
-    const contacts = await this.prisma.audienceContact.findMany({
-      where: { audienceId },
-      orderBy: { createdAt: "asc" },
-    });
+
+    const lines: string[] = [];
+    let cursor: { createdAt: Date; id: string } | null = null;
+    for (;;) {
+      // Annotated: the keyset `where` reads `cursor`, which the tail of the loop
+      // writes back from `page` – without it TS chases that as a circular inference.
+      const page: ExportRow[] = await this.prisma.audienceContact.findMany({
+        where: {
+          audienceId,
+          ...(cursor
+            ? {
+                OR: [
+                  { createdAt: { gt: cursor.createdAt } },
+                  { createdAt: cursor.createdAt, id: { gt: cursor.id } },
+                ],
+              }
+            : {}),
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        take: AudiencesService.EXPORT_PAGE_SIZE,
+        select: { id: true, createdAt: true, fullName: true, phoneE164: true, metadata: true },
+      });
+      if (page.length === 0) break;
+      for (const contact of page) {
+        const name = JSON.stringify(contact.fullName || "");
+        const phone = JSON.stringify(contact.phoneE164);
+        const metadata = JSON.stringify(JSON.stringify(contact.metadata || {}));
+        lines.push(`${name},${phone},${metadata}`);
+      }
+      if (page.length < AudiencesService.EXPORT_PAGE_SIZE) break;
+      const last = page[page.length - 1];
+      cursor = { createdAt: last.createdAt, id: last.id };
+    }
+
     const header = "name,phone,metadata\n";
-    const lines = contacts.map((contact) => {
-      const name = JSON.stringify(contact.fullName || "");
-      const phone = JSON.stringify(contact.phoneE164);
-      const metadata = JSON.stringify(JSON.stringify(contact.metadata || {}));
-      return `${name},${phone},${metadata}`;
-    });
     return header + lines.join("\n");
   }
 
