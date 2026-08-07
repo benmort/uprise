@@ -57,6 +57,7 @@ import { getSession } from "@/lib/session";
 import { useFlags } from "@/components/flags/flags-provider";
 import { planVisible, planLocked } from "@/lib/flags/plan-gating";
 import { type FeatureFlagKey } from "@uprise/flags";
+import { PageHeader } from "@/components/shell/page-header";
 
 type Slice<T> = { data?: T; error?: string } | null; // null === loading
 
@@ -259,24 +260,21 @@ export default function DashboardPage() {
     >
       {fs.isFullscreen ? <FullscreenExitCue onExit={fs.toggle} /> : null}
       {/* Header + quick actions */}
-      <div
-        className={cn(
-          "flex flex-wrap items-start justify-between gap-3",
-          // Reserve room at the right so the fullscreen escape cue doesn't sit over Quick Actions.
-          fs.isFullscreen && "pr-14 sm:pr-52",
-        )}
-      >
-        <div>
-          <div className="flex items-center gap-2">
-            <LayoutDashboard className="h-6 w-6 shrink-0 text-primary" />
-            <h1 className="text-2xl font-extrabold">Dashboard</h1>
-          </div>
-          <p className="text-sm text-muted-foreground">
+      <PageHeader
+        icon={LayoutDashboard}
+        title="Dashboard"
+        // The dashboard IS the trail root — an auto "Dashboard › Dashboard" would be degenerate.
+        breadcrumbs={false}
+        // Reserve room at the right so the fullscreen escape cue doesn't sit over Quick Actions.
+        className={cn(fs.isFullscreen && "pr-14 sm:pr-52")}
+        description={
+          <>
             Everything across Uprise — messaging, conversations, audiences, automation and the field.
             {lastUpdatedAt ? ` Updated ${lastUpdatedAt.toLocaleTimeString()}.` : ""}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+          </>
+        }
+        actions={
+          <>
         <QuickActions
           actions={[
             {
@@ -314,14 +312,16 @@ export default function DashboardPage() {
           ]}
         />
         {!fs.isFullscreen ? <FullscreenButton isFullscreen={fs.isFullscreen} onToggle={fs.toggle} /> : null}
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <NewConversationMenu
         open={composeOpen}
         onClose={() => setComposeOpen(false)}
         onPick={(ch) => {
           if (ch === "sms") void newBlast("SMS");
+          else if (ch === "whatsapp") void newBlast("WHATSAPP");
           else if (ch === "call") router.push("/channels/calls?new=1");
           else if (ch === "event") router.push("/events");
           else if (ch === "canvass") router.push("/canvass/new");
@@ -697,7 +697,7 @@ function SystemHealth({
   flags: FeatureFlagsResponse | null;
 }) {
   const dot = (ok: boolean) =>
-    `inline-block h-2 w-2 rounded-full ${ok ? "bg-[hsl(var(--success))]" : "bg-[hsl(var(--error))]"}`;
+    `inline-block h-2 w-2 rounded-full ${ok ? "bg-success" : "bg-error"}`;
   const waiting = queue?.queues.reduce((t, q) => t + q.counts.waiting, 0) ?? 0;
   const failed = queue?.queues.reduce((t, q) => t + q.counts.failed, 0) ?? 0;
   return (
@@ -708,7 +708,7 @@ function SystemHealth({
             <span className={dot(queue.redis.connected)} /> Redis {queue.redis.connected ? "connected" : "down"}
           </span>
           <span>Queue: {waiting.toLocaleString()} waiting</span>
-          <span className={failed > 0 ? "text-[hsl(var(--error))]" : undefined}>
+          <span className={failed > 0 ? "text-error" : undefined}>
             {failed.toLocaleString()} failed
           </span>
         </>
@@ -722,7 +722,7 @@ function SystemHealth({
             {flags.FEATURE_REALTIME_ENABLED ? "on" : "off"}
           </span>
           {flags.BLAST_DRY_RUN ? (
-            <span className="rounded bg-[hsl(var(--warning-foreground))]/10 px-1.5 py-0.5 font-medium text-[hsl(var(--warning-foreground))]">
+            <span className="rounded bg-warning-foreground/10 px-1.5 py-0.5 font-medium text-warning-foreground">
               Dry-run mode
             </span>
           ) : null}

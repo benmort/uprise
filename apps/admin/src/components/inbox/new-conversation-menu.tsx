@@ -23,11 +23,13 @@ type ChannelCard = {
   tint: string;
 };
 
-// Channel catalogue. SMS, Call, Automated calls, Event + Canvass are live (first five in the
-// grid); the rest are placeholders shown greyed-out with a "Soon" badge until their composers
-// land, so the picker previews the full cross-channel roadmap without dead ends.
+// Channel catalogue. SMS, WhatsApp, Call, Automated calls, Event + Canvass are live (the
+// messaging blasts lead the first row); the rest are placeholders shown greyed-out with a
+// "Soon" badge until their composers land, so the picker previews the full cross-channel
+// roadmap without dead ends.
 const CHANNELS: ChannelCard[] = [
   { key: "sms", title: "New text (SMS)", sub: "Send an SMS broadcast or reply", icon: MessageSquareText, tint: "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300" },
+  { key: "whatsapp", title: "New WhatsApp Blast", sub: "Send a WhatsApp broadcast", icon: MessageCircle, tint: "bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300" },
   { key: "call", title: "New call", sub: "Place an outbound voice call", icon: Phone, tint: "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300" },
   // PhoneOutgoing is the autodialer's own icon (its page header and sidebar entry), so the card
   // reads as the same thing they already know — and stays distinct from the one-to-one "New call".
@@ -35,13 +37,12 @@ const CHANNELS: ChannelCard[] = [
   { key: "event", title: "New event", sub: "Schedule an event supporters can RSVP to", icon: CalendarPlus, tint: "bg-teal-100 text-teal-600 dark:bg-teal-500/15 dark:text-teal-300" },
   { key: "canvass", title: "New canvass", sub: "Plan a door-knock and cut turf", icon: DoorOpen, tint: "bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-300" },
   { key: "email", title: "New email", sub: "Send from the shared address", icon: Mail, tint: "bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300" },
-  { key: "whatsapp", title: "WhatsApp message", sub: "Reply to a WhatsApp contact", icon: MessageCircle, tint: "bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300" },
   { key: "social", title: "Social message", sub: "DM or reply on socials", icon: Heart, tint: "bg-pink-100 text-pink-600 dark:bg-pink-500/15 dark:text-pink-300" },
 ];
 
 // These have live destinations today; everything else is "Soon" (disabled + greyed).
 const isLive = (key: NewConversationChannel) =>
-  key === "sms" || key === "call" || key === "autodialer" || key === "event" || key === "canvass";
+  key === "sms" || key === "whatsapp" || key === "call" || key === "autodialer" || key === "event" || key === "canvass";
 
 /**
  * "Start a new conversation" — the shared-inbox channel picker. A backdrop-blurred

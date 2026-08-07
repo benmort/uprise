@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { WalkView } from "@uprise/field";
-import { DEMO_ASSIGNMENT, DEMO_POSITION, DEMO_ROUTE, DEMO_TURF_ID } from "./fixture";
+import { DemoChrome } from "./demo-chrome";
+import { DemoWalk } from "./demo-walk";
 
 /**
  * /demo — the canvasser walk view, open to anyone.
@@ -13,8 +13,9 @@ import { DEMO_ASSIGNMENT, DEMO_POSITION, DEMO_ROUTE, DEMO_TURF_ID } from "./fixt
  * Two properties hold this together, and both must survive any change here:
  *   1. It renders no real data. `assignment` is passed in, so WalkView never fetches a
  *      volunteer-scoped payload — an unauthenticated page cannot leak a supporter's address.
- *   2. It writes nothing. `readOnly` hides the knock controls, so there is no path from here into
- *      the door form (which is gated) or the outbox.
+ *   2. It writes nothing. `readOnly` disables the live knock flow; door taps land on the demo's
+ *      own `/demo/door/[stopId]` screen (dispositions + survey over fixture data, see
+ *      demo-walk.tsx), which records to a toast and never touches the outbox or the API.
  */
 export const metadata: Metadata = {
   title: "Uprise Field — demo walk list",
@@ -42,36 +43,20 @@ export default function DemoWalkPage({
   const embedded = searchParams?.embed === "1";
 
   return (
-    <div className="flex flex-col gap-3">
-      {embedded ? null : (
-        <div className="rounded-xl border border-border bg-surface-variant px-3.5 py-2.5">
-          <p className="text-xs font-semibold text-foreground">Demo data</p>
-          <p className="text-xs text-muted-foreground">
-            A sample walk list — every resident and outcome here is invented. Sign up to walk a real
-            one.
-          </p>
-        </div>
-      )}
+    <DemoChrome embedded={embedded}>
+      <div className="flex flex-col gap-3">
+        {embedded ? null : (
+          <div className="rounded-xl border border-border bg-surface-variant px-3.5 py-2.5">
+            <p className="text-xs font-semibold text-foreground">Demo data</p>
+            <p className="text-xs text-muted-foreground">
+              A sample walk list — every resident and outcome here is invented. Sign up to walk a
+              real one.
+            </p>
+          </div>
+        )}
 
-      <WalkView
-        turfId={DEMO_TURF_ID}
-        readOnly
-        // Only in the embed: there the page IS the phone screen, so the map should run to the
-        // bottom. Standalone, the "Demo data" notice sits above it and a viewport-height column
-        // would push itself into a scroll.
-        fillViewport={embedded}
-        // Open on the map. This is a tour, not a shift: the map is what reads as a canvassing app
-        // at a glance, where the list is a column of addresses that could be anything. The live app
-        // still opens on the list, and a visitor who switches here is still remembered.
-        defaultMode="map"
-        // No "Scroll to zoom" checkbox. It sets a cross-map preference that isn't a visitor's to
-        // set, and turning cooperative gestures off inside the homepage's iframe would mean a
-        // scroll over the phone zoomed the map instead of scrolling the page past it.
-        mapGestureToggle={false}
-        assignment={DEMO_ASSIGNMENT}
-        sampleUserPosition={DEMO_POSITION}
-        routeGeometry={DEMO_ROUTE}
-      />
-    </div>
+        <DemoWalk embedded={embedded} />
+      </div>
+    </DemoChrome>
   );
 }

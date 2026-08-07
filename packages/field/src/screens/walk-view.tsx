@@ -21,7 +21,7 @@ import { ReplayControls, ReplayMapContent, useRouteReplay } from "../components/
 import { WalkStopCard, type WalkStop } from "../components/walk-stop-card";
 import { WalkModeToggle, type WalkMode } from "../components/walk-mode-toggle";
 import { MarqueeText } from "../components/marquee-text";
-import { ProgressBar } from "../components/progress-bar";
+import { ProgressBar } from "@uprise/ui";
 
 // Map is heavy + touches window: keep it out of the offline list-mode bundle.
 const TurfMap = dynamic(() => import("../components/turf-map").then((m) => m.TurfMap), {
@@ -55,6 +55,7 @@ export function WalkView({
   replayVolunteerId,
   defaultMode = "list",
   mapGestureToggle = true,
+  buildDoorHref,
 }: {
   turfId: string;
   readOnly?: boolean;
@@ -84,6 +85,11 @@ export function WalkView({
   defaultMode?: WalkMode;
   /** Show the map's "Scroll to zoom" checkbox. See TurfMap's `gestureToggle`. */
   mapGestureToggle?: boolean;
+  /** Where a door tap lands. When set, door taps work even in `readOnly` and navigate to
+   *  this href instead of the live (gated) `/{turfId}/door/{stopId}` screen. The public
+   *  demo passes its own door route here so a visitor can knock a fixture door; the admin
+   *  organiser preview passes nothing and stays tap-free. */
+  buildDoorHref?: (stopId: string) => string;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -335,6 +341,10 @@ export function WalkView({
   });
 
   const openDoor = (id: string) => {
+    if (buildDoorHref) {
+      router.push(buildDoorHref(id));
+      return;
+    }
     if (readOnly) return;
     router.push(`/${turfId}/door/${id}`);
   };
@@ -513,8 +523,9 @@ export function WalkView({
               userPosition={userPosition}
               // Tap a door → info popover. Live app: its "Knock at this door" button runs
               // openDoor (the knock flow, now fronted by the bubble). Read-only preview:
-              // no knock, a "View full detail" link to the admin address page instead.
-              onStopTap={readOnly ? undefined : (id) => openDoor(id)}
+              // no knock, a "View full detail" link to the admin address page instead —
+              // unless a door href is provided (the public demo), which restores the knock.
+              onStopTap={readOnly && !buildDoorHref ? undefined : (id) => openDoor(id)}
               stopPopup
               buildDetailHref={readOnly ? (pid) => `/data/addresses/${encodeURIComponent(pid)}` : undefined}
               routeGeometry={replay.active ? null : mapRoute}
@@ -544,6 +555,18 @@ export function WalkView({
                 <span className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
                   {formatDistance(directions.distanceM)}
                 </span>
+              ) : null}
+              {/* The demo's way in: the compact bar keeps its one-line footprint (it lives in a
+                  phone-sized embed) but gains the knock CTA the tour is about. */}
+              {buildDoorHref ? (
+                <Button
+                  variant="secondary"
+                  className="h-9 shrink-0 gap-1.5 px-3.5 text-sm"
+                  onClick={() => openDoor(nextStop.id)}
+                >
+                  <Home className="h-4 w-4" />
+                  Knock
+                </Button>
               ) : null}
             </div>
           ) : nextStop && !replay.active ? (

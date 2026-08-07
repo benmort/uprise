@@ -1,4 +1,4 @@
-import type { CanvassAssignment } from "@uprise/field";
+import type { CanvassAssignment, DispositionDef, SurveySchema } from "@uprise/field";
 
 /**
  * The demo walk list — a small block of Glebe, mid-shift.
@@ -99,4 +99,66 @@ export const DEMO_POSITION = { lat: STOPS[1].lat, lng: STOPS[1].lng };
 export const DEMO_ROUTE: GeoJSON.LineString = {
   type: "LineString",
   coordinates: STOPS.map((s) => [s.lng, s.lat]),
+};
+
+/**
+ * The door-outcome catalogue for the demo door screen — the same shape
+ * `GET /engagement/dispositions?channel=DOOR` returns, so the real <DispositionPad>
+ * renders it untouched: two "Spoke to …" primaries (which reveal the survey), a
+ * no-contact grid, and the separated data-quality row.
+ */
+export const DEMO_DISPOSITIONS: DispositionDef[] = [
+  { id: "demo-disp-1", tenantId: null, code: "spoke_to_target", label: "Spoke to resident", layer: "CONTACT_RESULT", channel: "DOOR", isTerminal: false, isLocked: false, orderIndex: 0 },
+  { id: "demo-disp-2", tenantId: null, code: "spoke_to_other", label: "Spoke to someone else", layer: "CONTACT_RESULT", channel: "DOOR", isTerminal: false, isLocked: false, orderIndex: 1 },
+  { id: "demo-disp-3", tenantId: null, code: "not_home", label: "Not home", layer: "CONTACT_RESULT", channel: "DOOR", isTerminal: false, isLocked: false, orderIndex: 2 },
+  { id: "demo-disp-4", tenantId: null, code: "come_back_later", label: "Come back later", layer: "CONTACT_RESULT", channel: "DOOR", isTerminal: false, isLocked: false, orderIndex: 3 },
+  { id: "demo-disp-5", tenantId: null, code: "refused", label: "Refused", layer: "CONTACT_RESULT", channel: "DOOR", isTerminal: false, isLocked: false, orderIndex: 4 },
+  { id: "demo-disp-6", tenantId: null, code: "moved_away", label: "Moved away", layer: "DATA_QUALITY", channel: "DOOR", isTerminal: true, isLocked: false, orderIndex: 5 },
+  { id: "demo-disp-7", tenantId: null, code: "wrong_address", label: "Wrong address", layer: "DATA_QUALITY", channel: "DOOR", isTerminal: true, isLocked: false, orderIndex: 6 },
+];
+
+/**
+ * The demo campaign's survey, run by the real <SurveyRunner> after a "Spoke to …" outcome.
+ * Deliberately exercises every question style in a four-stop path — single-choice with a
+ * branch (an opposed resident ends the survey, an undecided one gets the follow-up text
+ * question), yes/no, and a scale — so the tour shows what a campaign can author.
+ */
+export const DEMO_SURVEY: SurveySchema = {
+  category: "Foreshore survey",
+  entryQuestionKey: "position",
+  questions: [
+    {
+      id: "demo-q-position",
+      key: "position",
+      prompt: "Where do they stand on protecting the Glebe foreshore?",
+      type: "single_choice",
+      options: [
+        { id: "demo-q-position-support", value: "supports", label: "Supports the campaign", nextQuestionKey: "planting_day" },
+        { id: "demo-q-position-undecided", value: "undecided", label: "Undecided", nextQuestionKey: "concerns" },
+        { id: "demo-q-position-opposed", value: "opposed", label: "Opposed", isTerminal: true },
+      ],
+    },
+    {
+      id: "demo-q-concerns",
+      key: "concerns",
+      prompt: "What would help them decide?",
+      type: "text",
+      defaultNextQuestionKey: "planting_day",
+    },
+    {
+      id: "demo-q-planting-day",
+      key: "planting_day",
+      prompt: "Will they join the planting day on Sunday?",
+      type: "yes_no",
+      defaultNextQuestionKey: "priority",
+    },
+    {
+      id: "demo-q-priority",
+      key: "priority",
+      prompt: "How important is the foreshore to them?",
+      type: "scale",
+      scaleMin: 1,
+      scaleMax: 5,
+    },
+  ],
 };

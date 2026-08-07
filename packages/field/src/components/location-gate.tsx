@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { MapPin, Loader2, Settings } from "lucide-react";
 import { Button } from "@uprise/ui";
 import { useGeolocation } from "../hooks/use-geolocation";
@@ -18,11 +19,15 @@ import { useGeolocation } from "../hooks/use-geolocation";
  * My turf.
  */
 export function LocationGate() {
+  // Guarded here as well as at the FieldShell render site: the public demo must never ask a
+  // browsing visitor for their location, no matter how the shell is rearranged later.
+  const isDemo = usePathname()?.startsWith("/demo") ?? false;
   const { permission, locating, capture } = useGeolocation();
   const [dismissed, setDismissed] = useState(false);
 
-  // Hidden when: already granted, no geolocation at all (desktop/SSR), or dismissed this session.
-  if (dismissed || permission === "granted" || permission === "unsupported") return null;
+  // Hidden when: on the demo, already granted, no geolocation at all (desktop/SSR), or
+  // dismissed this session.
+  if (isDemo || dismissed || permission === "granted" || permission === "unsupported") return null;
 
   const denied = permission === "denied";
 
