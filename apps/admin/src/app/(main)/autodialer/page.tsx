@@ -172,7 +172,8 @@ export default function AutodialerCampaignsPage() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiTile label="Active campaigns" value={kpi(s?.active)} />
         <KpiTile label="Calls today" value={kpi(s?.callsToday)} />
-        <KpiTile label="Connect rate" value={s?.connectRate == null ? "—" : `${s.connectRate}%`} />
+        {/* Tenant-wide connect rate is computed over a 90-day window (DIALER_STATS_WINDOW_DAYS). */}
+        <KpiTile label="Connect rate (90d)" value={s?.connectRate == null ? "—" : `${s.connectRate}%`} />
         <KpiTile label="Transfers" value={kpi(s?.transfers)} />
       </div>
 
