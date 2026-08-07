@@ -47,8 +47,14 @@ export class TextingService {
       select: { id: true, name: true, channel: true, status: true },
     });
     if (campaigns.length === 0) return [];
-    const blasts = await this.prisma.blast.findMany({
-      where: { tenantId, campaignId: { in: campaigns.map((c) => c.id) } },
+    // The JSON-path predicate mirrors BlastsService.isP2pBlast (metadata.p2p === true)
+    // so only P2P blasts leave the database at all.
+    const p2pBlasts = await this.prisma.blast.findMany({
+      where: {
+        tenantId,
+        campaignId: { in: campaigns.map((c) => c.id) },
+        metadata: { path: ["p2p"], equals: true },
+      },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -56,11 +62,9 @@ export class TextingService {
         title: true,
         status: true,
         channel: true,
-        metadata: true,
         createdAt: true,
       },
     });
-    const p2pBlasts = blasts.filter((b) => this.blasts.isP2pBlast(b.metadata));
     const blastIds = p2pBlasts.map((b) => b.id);
 
     // Workload counts, grouped per blast in a handful of aggregate queries.
@@ -181,7 +185,7 @@ export class TextingService {
     });
     if (!blast) throw new ApiHttpException("TEXT_BANK_NOT_FOUND", "Text bank not found", HttpStatus.NOT_FOUND);
 
-    const [toSend, phones] = await Promise.all([
+    const [toSend, ownedConversations] = await Promise.all([
       this.prisma.blastRecipient.findMany({
         where: {
           blastId,
@@ -191,19 +195,24 @@ export class TextingService {
         orderBy: { assignedAt: "asc" },
         select: { id: true, phoneE164: true, renderedBody: true, contactId: true },
       }),
-      this.prisma.blastRecipient.findMany({
-        where: { blastId },
-        select: { phoneE164: true },
-      }),
-    ]);
-    const bankPhones = new Set(phones.map((p) => p.phoneE164));
-    const conversations = (
-      await this.prisma.conversationState.findMany({
+      this.prisma.conversationState.findMany({
         where: { tenantId, channel: MessageChannel.SMS, ownerId: actor.id, resolved: false },
         orderBy: [{ unreadCount: "desc" }, { lastMessageAt: "desc" }],
+        take: 100,
         select: { contactPhone: true, unreadCount: true, lastMessageAt: true, contactId: true },
-      })
-    ).filter((c) => bankPhones.has(c.contactPhone));
+      }),
+    ]);
+    // Membership-test only the caller's (bounded) conversations against the bank – rides
+    // UNIQUE(blastId, phoneE164) instead of loading every recipient phone of the blast.
+    const convoPhones = ownedConversations.map((c) => c.contactPhone);
+    const inBank = convoPhones.length
+      ? await this.prisma.blastRecipient.findMany({
+          where: { blastId, phoneE164: { in: convoPhones } },
+          select: { phoneE164: true },
+        })
+      : [];
+    const bankPhones = new Set(inBank.map((p) => p.phoneE164));
+    const conversations = ownedConversations.filter((c) => bankPhones.has(c.contactPhone));
 
     // Contact names, one lookup across both lists.
     const contactIds = [

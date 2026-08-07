@@ -31,7 +31,7 @@ describe("InboxService", () => {
     listConversations: jest.fn(),
     listRecentMessageContacts: jest.fn(),
     listContactPhonesForBlast: jest.fn(),
-    listContactPhonesForAudience: jest.fn(),
+    listAudienceMemberPhones: jest.fn(),
     listContactNamesByPhones: jest.fn(),
     getThread: jest.fn(),
   } as any;
@@ -110,6 +110,8 @@ describe("InboxService", () => {
         OR: [{ blastId: { not: null } }, { recipientId: { not: null } }],
       },
       orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+      // Attribution only ever reads these two fields; the webhook path stays narrow.
+      select: { blastId: true, recipientId: true },
     });
     expect(prisma.inboundMessage.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -257,6 +259,44 @@ describe("InboxService", () => {
       "+15550000001",
     ]);
     expect(rows.find((row) => row.contactPhone === "+15550000002")?.unreadCount).toBe(0);
+  });
+
+  it("filters to audience members by membership-testing the merged page phones", async () => {
+    repo.listConversations.mockResolvedValue([
+      {
+        contactPhone: "+15550000001",
+        unreadCount: 2,
+        resolved: false,
+        lastMessageAt: new Date("2026-05-08T10:00:00.000Z"),
+      },
+    ]);
+    repo.listRecentMessageContacts.mockResolvedValue([
+      {
+        contactPhone: "+15550000002",
+        lastMessageAt: new Date("2026-05-08T10:30:00.000Z"),
+      },
+    ]);
+    twilio.getLatestByContact.mockResolvedValue({});
+    repo.listAudienceMemberPhones.mockResolvedValue(["+15550000002"]);
+
+    const rows = await service.listConversations("org_1", { audienceId: "aud_1" });
+
+    // The membership test receives exactly the merged, sorted page – never a
+    // message-table-derived allow-list.
+    expect(repo.listAudienceMemberPhones).toHaveBeenCalledWith("org_1", "aud_1", [
+      "+15550000002",
+      "+15550000001",
+    ]);
+    expect(rows.map((row) => row.contactPhone)).toEqual(["+15550000002"]);
+  });
+
+  it("skips the audience membership test when no audience filter is given", async () => {
+    repo.listConversations.mockResolvedValue([]);
+    repo.listRecentMessageContacts.mockResolvedValue([]);
+    twilio.getLatestByContact.mockResolvedValue({});
+
+    await service.listConversations("org_1");
+    expect(repo.listAudienceMemberPhones).not.toHaveBeenCalled();
   });
 
   it("deduplicates thread messages when twilio sid overlaps db records", async () => {
