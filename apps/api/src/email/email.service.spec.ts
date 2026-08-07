@@ -49,7 +49,9 @@ function setup() {
       update: jest.fn(async () => ({})),
       findUnique: jest.fn(),
       findFirst: jest.fn(),
+      findMany: jest.fn(async () => []),
     },
+    webhookEvent: { findMany: jest.fn(async () => []) },
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
   };
   const sendgrid = { send: jest.fn(async () => ({ providerMessageId: "sg1" })) } as any;
@@ -58,11 +60,23 @@ function setup() {
     invalidate: jest.fn(),
   } as any;
   const outbox = { append: jest.fn() } as any;
-  const webhookEvents = { claim: jest.fn(async () => true) } as any;
+  const webhookEvents = { claim: jest.fn(async () => true), release: jest.fn() } as any;
   const logger = { error: jest.fn() } as any;
   const svc = new EmailService(prisma, sendgrid, senderResolver, outbox, webhookEvents, logger);
   return { svc, prisma, sendgrid, senderResolver, outbox, webhookEvents };
 }
+
+/** The narrow Email snapshot the batched webhook read selects. */
+const emailRow = (over: Record<string, unknown> = {}) => ({
+  id: "em1",
+  tenantId: "t1",
+  toAddress: "a@b.c",
+  status: "SENT",
+  openedAt: null,
+  clickedAt: null,
+  providerMessageId: null,
+  ...over,
+});
 
 describe("EmailService", () => {
   it("sends a transactional email inline using the built-in template + vars", async () => {
@@ -256,14 +270,7 @@ describe("EmailService", () => {
 
   it("webhook: open emits email.email.opened (first write)", async () => {
     const { svc, prisma, outbox } = setup();
-    prisma.email.findUnique.mockResolvedValue({
-      id: "em1",
-      tenantId: "t1",
-      toAddress: "a@b.c",
-      status: "SENT",
-      openedAt: null,
-      clickedAt: null,
-    });
+    prisma.email.findMany.mockResolvedValue([emailRow()]);
     await svc.processSendGridEvents([{ event: "open", sg_event_id: "eo", emailId: "em1" }]);
     expect(outbox.append).toHaveBeenCalledWith(
       expect.anything(),
@@ -273,14 +280,7 @@ describe("EmailService", () => {
 
   it("webhook: click emits email.email.clicked (first write)", async () => {
     const { svc, prisma, outbox } = setup();
-    prisma.email.findUnique.mockResolvedValue({
-      id: "em1",
-      tenantId: "t1",
-      toAddress: "a@b.c",
-      status: "DELIVERED",
-      openedAt: new Date(),
-      clickedAt: null,
-    });
+    prisma.email.findMany.mockResolvedValue([emailRow({ status: "DELIVERED", openedAt: new Date() })]);
     await svc.processSendGridEvents([{ event: "click", sg_event_id: "ec", emailId: "em1" }]);
     expect(outbox.append).toHaveBeenCalledWith(
       expect.anything(),
@@ -290,14 +290,7 @@ describe("EmailService", () => {
 
   it("webhook: delivered emits the event atomically only when the transition applied", async () => {
     const { svc, prisma, outbox } = setup();
-    prisma.email.findUnique.mockResolvedValue({
-      id: "em1",
-      tenantId: "t1",
-      toAddress: "a@b.c",
-      status: "SENT",
-      openedAt: null,
-      clickedAt: null,
-    });
+    prisma.email.findMany.mockResolvedValue([emailRow()]);
     await svc.processSendGridEvents([{ event: "delivered", sg_event_id: "ed", emailId: "em1" }]);
     expect(prisma.email.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "DELIVERED" }) }),
@@ -310,14 +303,8 @@ describe("EmailService", () => {
 
   it("webhook: a replayed delivered on a terminal email emits no event (no spurious append)", async () => {
     const { svc, prisma, outbox } = setup();
-    prisma.email.findUnique.mockResolvedValue({
-      id: "em1",
-      tenantId: "t1",
-      toAddress: "a@b.c",
-      status: "BOUNCED", // terminal — DELIVERED transition is illegal
-      openedAt: null,
-      clickedAt: null,
-    });
+    // BOUNCED is terminal – the DELIVERED transition is illegal
+    prisma.email.findMany.mockResolvedValue([emailRow({ status: "BOUNCED" })]);
     await svc.processSendGridEvents([{ event: "delivered", sg_event_id: "ed2", emailId: "em1" }]);
     expect(prisma.email.update).not.toHaveBeenCalled();
     expect(outbox.append).not.toHaveBeenCalledWith(
@@ -346,7 +333,7 @@ describe("EmailService", () => {
 
   it("webhook: delivered transitions a SENT email to DELIVERED", async () => {
     const { svc, prisma } = setup();
-    prisma.email.findUnique.mockResolvedValue({ id: "em1", status: "SENT", openedAt: null, clickedAt: null });
+    prisma.email.findMany.mockResolvedValue([emailRow()]);
     await svc.processSendGridEvents([{ event: "delivered", sg_event_id: "e1", emailId: "em1" }]);
     expect(prisma.email.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "em1" }, data: expect.objectContaining({ status: "DELIVERED" }) }),
@@ -354,34 +341,150 @@ describe("EmailService", () => {
   });
 
   it("webhook: a duplicate (claim=false) is skipped", async () => {
-    const { svc, prisma, webhookEvents } = setup();
+    const { svc, prisma, outbox, webhookEvents } = setup();
     webhookEvents.claim.mockResolvedValue(false);
+    prisma.email.findMany.mockResolvedValue([emailRow()]);
     await svc.processSendGridEvents([{ event: "delivered", sg_event_id: "e1", emailId: "em1" }]);
-    expect(prisma.email.findUnique).not.toHaveBeenCalled();
+    // The batched resolution read runs up front by design; nothing is applied.
     expect(prisma.email.update).not.toHaveBeenCalled();
+    expect(outbox.append).not.toHaveBeenCalled();
   });
 
   it("webhook: open is first-write-wins (skips when already opened)", async () => {
     const { svc, prisma } = setup();
-    prisma.email.findUnique.mockResolvedValue({ id: "em1", status: "SENT", openedAt: new Date(), clickedAt: null });
+    prisma.email.findMany.mockResolvedValue([emailRow({ openedAt: new Date() })]);
     await svc.processSendGridEvents([{ event: "open", sg_event_id: "e2", emailId: "em1" }]);
     expect(prisma.email.update).not.toHaveBeenCalled();
   });
 
   it("webhook: a replayed delivered on an already-DELIVERED email is a no-op", async () => {
     const { svc, prisma } = setup();
-    prisma.email.findUnique.mockResolvedValue({ id: "em1", status: "DELIVERED", openedAt: null, clickedAt: null });
+    prisma.email.findMany.mockResolvedValue([emailRow({ status: "DELIVERED" })]);
     await svc.processSendGridEvents([{ event: "delivered", sg_event_id: "e3", emailId: "em1" } as SendGridEvent]);
     expect(prisma.email.update).not.toHaveBeenCalled();
   });
 
   it("webhook: resolves by sg_message_id with the .filterN suffix stripped", async () => {
     const { svc, prisma } = setup();
-    prisma.email.findFirst.mockResolvedValue({ id: "em9", status: "SENT", openedAt: null, clickedAt: null });
+    prisma.email.findMany.mockResolvedValue([emailRow({ id: "em9", providerMessageId: "abc" })]);
     await svc.processSendGridEvents([{ event: "bounce", sg_event_id: "e4", sg_message_id: "abc.filter0001.16", reason: "bad" }]);
-    expect(prisma.email.findFirst).toHaveBeenCalledWith({ where: { providerMessageId: "abc" } });
+    expect(prisma.email.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { OR: [{ providerMessageId: { in: ["abc"] } }] } }),
+    );
     expect(prisma.email.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "BOUNCED", bounceReason: "bad" }) }),
     );
+  });
+
+  it("webhook: one Email read + one dedup read for the whole batch", async () => {
+    const { svc, prisma } = setup();
+    prisma.email.findMany.mockResolvedValue([emailRow()]);
+    await svc.processSendGridEvents([
+      { event: "delivered", sg_event_id: "e1", emailId: "em1" },
+      { event: "open", sg_event_id: "e2", emailId: "em1" },
+      { event: "bounce", sg_event_id: "e3", sg_message_id: "xyz.filter1", reason: "r" },
+    ]);
+    expect(prisma.email.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.email.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { OR: [{ id: { in: ["em1"] } }, { providerMessageId: { in: ["xyz"] } }] },
+      }),
+    );
+    expect(prisma.webhookEvent.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.webhookEvent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { provider: "sendgrid", eventId: { in: ["e1", "e2", "e3"] } } }),
+    );
+  });
+
+  it("webhook: an event already recorded as processed is dropped without a claim", async () => {
+    const { svc, prisma, outbox, webhookEvents } = setup();
+    prisma.webhookEvent.findMany.mockResolvedValue([{ eventId: "e1" }]);
+    prisma.email.findMany.mockResolvedValue([emailRow()]);
+    await svc.processSendGridEvents([{ event: "delivered", sg_event_id: "e1", emailId: "em1" }]);
+    expect(webhookEvents.claim).not.toHaveBeenCalled();
+    expect(prisma.email.update).not.toHaveBeenCalled();
+    expect(outbox.append).not.toHaveBeenCalled();
+  });
+
+  it("webhook: a duplicate event in one batch claims once and applies once", async () => {
+    const { svc, prisma, outbox, webhookEvents } = setup();
+    prisma.email.findMany.mockResolvedValue([emailRow()]);
+    await svc.processSendGridEvents([
+      { event: "delivered", sg_event_id: "e1", emailId: "em1" },
+      { event: "delivered", sg_event_id: "e1", emailId: "em1" },
+    ]);
+    expect(webhookEvents.claim).toHaveBeenCalledTimes(1);
+    expect(prisma.email.update).toHaveBeenCalledTimes(1);
+    const delivered = outbox.append.mock.calls.filter((c: any[]) => c[1].eventType === "email.email.delivered");
+    expect(delivered).toHaveLength(1);
+  });
+
+  it("webhook: a failed apply releases the claim so redelivery reprocesses", async () => {
+    const { svc, prisma, webhookEvents } = setup();
+    prisma.email.findMany.mockResolvedValue([emailRow()]);
+    prisma.email.update.mockRejectedValue(new Error("db down"));
+    await expect(
+      svc.processSendGridEvents([{ event: "delivered", sg_event_id: "e1", emailId: "em1" }]),
+    ).rejects.toThrow("db down");
+    expect(webhookEvents.claim).toHaveBeenCalledWith("sendgrid", "e1");
+    expect(webhookEvents.release).toHaveBeenCalledWith("sendgrid", "e1");
+  });
+
+  it("webhook: delivered then bounce in one batch – the bounce sees the in-memory DELIVERED state", async () => {
+    const { svc, prisma, outbox } = setup();
+    prisma.email.findMany.mockResolvedValue([emailRow()]); // status SENT
+    await svc.processSendGridEvents([
+      { event: "delivered", sg_event_id: "e1", emailId: "em1" },
+      { event: "bounce", sg_event_id: "e2", emailId: "em1", reason: "late hard bounce" },
+    ]);
+    // Same as sequential processing: SENT→DELIVERED, then DELIVERED→BOUNCED (both legal).
+    const statuses = prisma.email.update.mock.calls.map((c: any[]) => c[0].data.status);
+    expect(statuses).toEqual(["DELIVERED", "BOUNCED"]);
+    const types = outbox.append.mock.calls.map((c: any[]) => c[1].eventType);
+    expect(types).toEqual(["email.email.delivered", "email.email.bounced"]);
+  });
+
+  it("webhook: a second delivered in the same batch is rejected against the fresh state", async () => {
+    const { svc, prisma, outbox } = setup();
+    prisma.email.findMany.mockResolvedValue([emailRow()]); // status SENT
+    await svc.processSendGridEvents([
+      { event: "delivered", sg_event_id: "e1", emailId: "em1" },
+      { event: "delivered", sg_event_id: "e2", emailId: "em1" }, // distinct event id, same email
+    ]);
+    // Without the in-memory update the second event would re-apply SENT→DELIVERED
+    // and emit a duplicate outbox event.
+    expect(prisma.email.update).toHaveBeenCalledTimes(1);
+    const delivered = outbox.append.mock.calls.filter((c: any[]) => c[1].eventType === "email.email.delivered");
+    expect(delivered).toHaveLength(1);
+  });
+
+  it("webhook: two opens in one batch write openedAt once", async () => {
+    const { svc, prisma, outbox } = setup();
+    prisma.email.findMany.mockResolvedValue([emailRow()]);
+    await svc.processSendGridEvents([
+      { event: "open", sg_event_id: "e1", emailId: "em1" },
+      { event: "open", sg_event_id: "e2", emailId: "em1" },
+    ]);
+    expect(prisma.email.update).toHaveBeenCalledTimes(1);
+    const opened = outbox.append.mock.calls.filter((c: any[]) => c[1].eventType === "email.email.opened");
+    expect(opened).toHaveLength(1);
+  });
+
+  it("webhook: an event without an sg_event_id processes without claiming or dedup reads", async () => {
+    const { svc, prisma, webhookEvents } = setup();
+    prisma.email.findMany.mockResolvedValue([emailRow()]);
+    await svc.processSendGridEvents([{ event: "delivered", emailId: "em1" }]);
+    expect(webhookEvents.claim).not.toHaveBeenCalled();
+    expect(prisma.webhookEvent.findMany).not.toHaveBeenCalled();
+    expect(prisma.email.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "DELIVERED" }) }),
+    );
+  });
+
+  it("webhook: a batch with no resolvable references makes no Email read", async () => {
+    const { svc, prisma } = setup();
+    await svc.processSendGridEvents([{ event: "delivered", sg_event_id: "e1" }]);
+    expect(prisma.email.findMany).not.toHaveBeenCalled();
+    expect(prisma.email.update).not.toHaveBeenCalled();
   });
 });
