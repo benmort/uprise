@@ -455,7 +455,6 @@ model Contact {
   //   UNIQUE (tenantId, addressNorm) WHERE addressNorm IS NOT NULL
   // Prisma's DSL can't express partial uniques, so they live in migration SQL.
   @@index([tenantId, phoneE164])
-  @@index([tenantId, addressNorm])
   @@index([tenantId, turfId])
   @@index([tenantId, gnafPid])
   @@index([tenantId, email])
@@ -494,7 +493,6 @@ model ContactTagAssignment {
   tag       ContactTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, contactId, tagId])
-  @@index([tenantId, contactId])
   @@index([tagId])
   @@schema("public")
 }
@@ -1220,7 +1218,6 @@ model ContentBinding {
 
   @@unique([tenantId, objectType, objectId, contentType, slot], map: "ContentBinding_object_content_slot_key")
   @@index([tenantId, contentType, contentId])
-  @@index([tenantId, objectType, objectId])
   @@schema("canvass")
 }
 
@@ -2479,7 +2476,6 @@ model ContactSourceRecord {
   // tenants that both sync it. A cross-tenant unique made the second one collide.
   @@unique([tenantId, sourceSystem, externalId])
   @@index([contactId])
-  @@index([tenantId, sourceSystem])
   @@schema("audience")
 }
 
@@ -3359,7 +3355,6 @@ model DialerAttempt {
   updatedAt  DateTime             @updatedAt
 
   @@unique([campaignId, phoneE164, attemptNo])
-  @@index([campaignId, phoneE164])
   @@index([campaignId, outcome])
   @@index([callId])
   @@index([tenantId, createdAt])
