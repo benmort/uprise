@@ -116,7 +116,7 @@ describe("BlastsService integration-like flow", () => {
         ]),
       },
       blastRecipient: {
-        create: jest.fn().mockResolvedValue({ id: "recipient_1" }),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
         update: jest.fn().mockResolvedValue({}),
         findMany: jest
           .fn()
@@ -129,11 +129,7 @@ describe("BlastsService integration-like flow", () => {
           ])
           .mockResolvedValueOnce([])
           .mockResolvedValueOnce([]),
-        count: jest
-          .fn()
-          .mockResolvedValueOnce(0)
-          .mockResolvedValueOnce(0)
-          .mockResolvedValueOnce(0),
+        count: jest.fn().mockResolvedValue(0),
       },
       outboundMessage: {
         create: jest.fn().mockResolvedValue({}),
@@ -175,7 +171,10 @@ describe("BlastsService integration-like flow", () => {
     const sent = await service.sendNow("blast_1");
     expect(sent.sent).toBe(1);
     expect(sent.skipped).toBe(0);
-    expect(prismaMock.blastRecipient.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.blastRecipient.createMany).toHaveBeenCalledTimes(1);
+    const seeded = prismaMock.blastRecipient.createMany.mock.calls[0][0];
+    expect(seeded.skipDuplicates).toBe(true);
+    expect(seeded.data).toHaveLength(1);
     expect(twilioMock.sendMessage).toHaveBeenCalledTimes(1);
   });
 
@@ -441,7 +440,14 @@ describe("BlastsService integration-like flow", () => {
         update: jest.fn().mockResolvedValue({}),
       },
       blastRecipient: {
-        count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+        // Seeded count, then recalculate's remaining + INTERNAL_-prefixed failure counts.
+        // The EXTERNAL_-prefixed row is decided by the prefix, so the residual
+        // findMany that still classifies in JS returns nothing.
+        count: jest
+          .fn()
+          .mockResolvedValueOnce(1)
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(0),
         findMany: jest
           .fn()
           .mockResolvedValueOnce([
@@ -453,13 +459,7 @@ describe("BlastsService integration-like flow", () => {
             },
           ])
           .mockResolvedValueOnce([])
-          .mockResolvedValueOnce([
-            {
-              failureCategory: "EXTERNAL_CARRIER_OR_DESTINATION",
-              errorCode: "30008",
-              errorMessage: "Unknown destination handset",
-            },
-          ]),
+          .mockResolvedValueOnce([]),
         update: jest.fn().mockResolvedValue({}),
       },
       outboundMessage: {
@@ -519,7 +519,13 @@ describe("BlastsService integration-like flow", () => {
         update: jest.fn().mockResolvedValue({}),
       },
       blastRecipient: {
-        count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+        // The INTERNAL_NETWORK row is decided by the prefix count (third value), so
+        // the residual findMany returns nothing.
+        count: jest
+          .fn()
+          .mockResolvedValueOnce(1)
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(1),
         findMany: jest
           .fn()
           .mockResolvedValueOnce([
@@ -531,13 +537,7 @@ describe("BlastsService integration-like flow", () => {
             },
           ])
           .mockResolvedValueOnce([])
-          .mockResolvedValueOnce([
-            {
-              failureCategory: "INTERNAL_NETWORK",
-              errorCode: null,
-              errorMessage: "network timeout",
-            },
-          ]),
+          .mockResolvedValueOnce([]),
         update: jest.fn().mockResolvedValue({}),
       },
       outboundMessage: {
@@ -591,7 +591,13 @@ describe("BlastsService integration-like flow", () => {
         update: jest.fn().mockResolvedValue({}),
       },
       blastRecipient: {
-        count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+        // A null failureCategory is exactly what the prefix count cannot decide, so it
+        // comes back in the residual findMany and still classifies in JS.
+        count: jest
+          .fn()
+          .mockResolvedValueOnce(1)
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(0),
         findMany: jest
           .fn()
           .mockResolvedValueOnce([
@@ -761,7 +767,11 @@ describe("BlastsService integration-like flow", () => {
         update: jest.fn().mockResolvedValue({}),
       },
       blastRecipient: {
-        count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+        count: jest
+          .fn()
+          .mockResolvedValueOnce(1)
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(0),
         findMany: jest
           .fn()
           .mockResolvedValueOnce([
