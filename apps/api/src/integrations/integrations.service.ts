@@ -31,6 +31,7 @@ import {
   UpsertIntegrationConnectionDto,
 } from "./dto/integration.dto";
 import { IntegrationNotConnectedError, IntegrationValidationError } from "./integration.errors";
+import type { RemoteAudienceList } from "./connectors.types";
 import { DomainLogger } from "../common/logging/domain-logger.service";
 import { DispatchQueue } from "../common/queue/dispatch-queue";
 import { getIntegrationSyncJobId, QUEUE_JOB_TYPES, QUEUE_NAMES } from "../common/queue/queue.constants";
@@ -308,7 +309,40 @@ export class IntegrationsService {
       { query: dto.query, limit: 25, kind: dto.kind },
       connection.baseUrl,
     );
-    return { lists };
+    return { lists: await this.fillCountsFromLastSync(tenantId, connection.id, lists) };
+  }
+
+  /**
+   * Action Network's list resource carries no membership count, and its items collection
+   * deliberately omits `total_records` – there is no cheap remote count at all. For any
+   * list the provider left uncounted, fall back to what THIS tenant's last successful
+   * sync of that exact list counted, labelled `countSource: "last_sync"` so the UI can
+   * say how fresh the number is. Never-synced lists stay uncounted.
+   */
+  private async fillCountsFromLastSync(
+    tenantId: string,
+    connectionId: string,
+    lists: RemoteAudienceList[],
+  ): Promise<RemoteAudienceList[]> {
+    const uncounted = lists.filter((list) => typeof list.count !== "number");
+    if (uncounted.length === 0) return lists;
+    const jobs = await this.prisma.integrationSyncJob.findMany({
+      where: {
+        tenantId,
+        integrationConnectionId: connectionId,
+        status: IntegrationJobStatus.SUCCEEDED,
+        remoteListId: { in: uncounted.map((list) => list.id) },
+      },
+      orderBy: { createdAt: "desc" },
+      distinct: ["remoteListId"],
+      select: { remoteListId: true, syncedCount: true },
+    });
+    const lastSynced = new Map(jobs.map((job) => [job.remoteListId, job.syncedCount]));
+    return lists.map((list) => {
+      if (typeof list.count === "number") return list;
+      const count = lastSynced.get(list.id);
+      return typeof count === "number" ? { ...list, count, countSource: "last_sync" as const } : list;
+    });
   }
 
   async sampleList(tenantId: string, dto: SampleIntegrationListDto) {

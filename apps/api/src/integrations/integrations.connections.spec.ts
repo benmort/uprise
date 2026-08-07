@@ -51,6 +51,10 @@ describe("IntegrationsService — connection resolution", () => {
         deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
         findMany: jest.fn().mockResolvedValue([]),
       },
+      // searchLists falls back to last-sync counts for lists the provider left uncounted.
+      integrationSyncJob: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
     };
     const crypto = {
       encrypt: jest.fn((plain: string) => `enc:${plain}`),

@@ -44,6 +44,38 @@ describe("ActionNetworkConnector", () => {
     expect(lists[0].count).toBe(100);
   });
 
+  it("returns no count for a docs-shaped list resource — AN sends no membership count", async () => {
+    // The real AN list resource: identifiers/title/description/browser_url/_links only.
+    // `total_records` lives on the collection envelope and counts LISTS, not people —
+    // the service fills `count` from the tenant's last successful sync instead.
+    jest.spyOn(global, "fetch" as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        total_records: 70,
+        _embedded: {
+          "osdi:lists": [
+            {
+              identifiers: ["action_network:71f8feef-61c8-4e6b-9745-ec1d7752f298"],
+              title: "Stop Doing The Bad Thing Petition Signers",
+              description: "Report",
+              browser_url: "https://actionnetwork.org/reports/example/manage",
+              _links: {
+                self: {
+                  href: "https://actionnetwork.org/api/v2/lists/71f8feef-61c8-4e6b-9745-ec1d7752f298",
+                },
+              },
+            },
+          ],
+        },
+      }),
+    } as Response);
+
+    const lists = await connector.searchLists("key", { query: "" });
+    expect(lists[0].id).toBe("71f8feef-61c8-4e6b-9745-ec1d7752f298");
+    expect(lists[0].count).toBeUndefined();
+  });
+
   it("pages through every list page, not just the first", async () => {
     // The real account has 70 lists across 3 pages of 25. Reading page one only made the other
     // 45 unreachable — which is how "Together For Treaty All Activists" became invisible.

@@ -506,9 +506,10 @@ export class ActionNetworkConnector implements IntegrationConnector {
     const mapped: RemoteAudienceList[] = rows.map((row) => ({
       id: listIdFromRow(row),
       name: String(row.title || row.name || "Unnamed list"),
-      // Action Network reports a list's membership as `total_records` on the list
-      // resource; keep a couple of aliases as a fallback (`total_donations` is a
-      // fundraising field and never a list count).
+      // Action Network's list resource documents NO membership count (its `total_records`
+      // sits on the collection envelope and counts lists, not people), so these aliases
+      // only ever fire if AN adds one. The real fill happens in IntegrationsService,
+      // from this tenant's last successful sync of the list.
       count: [row.total_records, row.total_items, row.total, row.count].find(
         (v): v is number => typeof v === "number",
       ),

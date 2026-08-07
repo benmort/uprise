@@ -21,13 +21,14 @@ import {
 import { pollSyncJob, type IntegrationSyncJob } from "@/lib/audience-sync";
 import { importSummaryLine, type SyncRunStats } from "@/lib/sync-health";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
+import { SearchInput } from "@/components/ui/search-input";
+import { Alert, SegmentedControl } from "@uprise/ui";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -376,28 +377,23 @@ export function PullListCard({
         )}
         {selectedSource?.type === "NATION_BUILDER" && (
           // Lists/Tags switch — NationBuilder organisers mostly organise by tag.
-          <div className="flex gap-1 rounded-lg bg-surface-variant p-1" role="tablist" aria-label="Browse by">
-            {(["lists", "tags"] as const).map((k) => (
-              <button
-                key={k}
-                type="button"
-                role="tab"
-                aria-selected={browseKind === k}
-                className={`h-8 flex-1 rounded-md text-xs font-semibold transition ${
-                  browseKind === k ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground"
-                }`}
-                onClick={() => {
-                  setBrowseKind(k);
-                  setLists([]);
-                  setSelectedListId("");
-                  setListSearchMessage("");
-                  void loadIntegrationLists(undefined, undefined, k);
-                }}
-              >
-                {k === "lists" ? "Lists" : "Tags"}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            aria-label="Browse by"
+            fluid
+            size="sm"
+            value={browseKind}
+            options={[
+              { value: "lists", label: "Lists" },
+              { value: "tags", label: "Tags" },
+            ]}
+            onChange={(k) => {
+              setBrowseKind(k);
+              setLists([]);
+              setSelectedListId("");
+              setListSearchMessage("");
+              void loadIntegrationLists(undefined, undefined, k);
+            }}
+          />
         )}
         {sources.length > 0 && (
           <>
@@ -408,29 +404,17 @@ export function PullListCard({
                 void loadIntegrationLists(undefined, listQuery);
               }}
             >
-              <Input
+              <SearchInput
                 value={listQuery}
-                onChange={(e) => setListQuery(e.target.value)}
+                onValueChange={setListQuery}
+                onClear={() => void loadIntegrationLists(undefined, "")}
+                wrapperClassName="flex-1"
                 placeholder="Search lists by name…"
                 aria-label="Search remote lists by name"
               />
               <Button type="submit" size="sm" variant="outline" disabled={listsLoading || !selectedSourceId}>
                 Search
               </Button>
-              {listQuery ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  disabled={listsLoading}
-                  onClick={() => {
-                    setListQuery("");
-                    void loadIntegrationLists(undefined, "");
-                  }}
-                >
-                  Clear
-                </Button>
-              ) : null}
             </form>
             <div className="min-h-[220px] max-h-[260px] overflow-y-auto rounded border border-border">
               {pagedLists.map((list) => {
@@ -448,7 +432,9 @@ export function PullListCard({
                     <span>{String(list.name || "Unnamed list")}</span>
                     <span className="text-xs text-muted-foreground">
                       {typeof list.count === "number"
-                        ? `${list.count.toLocaleString()} contacts`
+                        ? `${list.count.toLocaleString()} contacts${
+                            list.countSource === "last_sync" ? " · last sync" : ""
+                          }`
                         : "—"}
                     </span>
                   </button>
@@ -485,30 +471,29 @@ export function PullListCard({
         {success && (
           // The answer, and the next step: what landed, what couldn't be texted, and the
           // three places this audience is now usable — plus the always-on search.
-          <div
-            data-testid="sync-success-panel"
-            className="space-y-3 rounded-lg border border-success/40 bg-success-container/30 p-4"
-          >
-            <p className="text-sm font-semibold text-foreground">
-              ✓ Synced {success.syncedCount.toLocaleString()} people from &ldquo;{success.listName}&rdquo;.
-            </p>
-            <p className="text-xs text-muted-foreground">{importSummaryLine(success.syncedCount, success.stats)}</p>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild size="sm">
-                <Link href="/channels/text">Send a text blast</Link>
-              </Button>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/autodialer">Start a calling campaign</Link>
-              </Button>
-              <Button asChild size="sm" variant="outline">
-                <Link href={`/audience/${success.audienceId}`}>View audience</Link>
-              </Button>
+          <Alert variant="success" showIcon={false} data-testid="sync-success-panel">
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-foreground">
+                ✓ Synced {success.syncedCount.toLocaleString()} people from &ldquo;{success.listName}&rdquo;.
+              </p>
+              <p className="text-xs text-muted-foreground">{importSummaryLine(success.syncedCount, success.stats)}</p>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild size="sm">
+                  <Link href="/channels/text">Send a text blast</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/autodialer">Start a calling campaign</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link href={`/audience/${success.audienceId}`}>View audience</Link>
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                A live search, <span className="font-medium">Imported contacts</span>, keeps up with everyone
+                from this source – find it under Searches.
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              A live search, <span className="font-medium">Imported contacts</span>, keeps up with everyone
-              from this source – find it under Searches.
-            </p>
-          </div>
+          </Alert>
         )}
       </CardContent>
     </Card>

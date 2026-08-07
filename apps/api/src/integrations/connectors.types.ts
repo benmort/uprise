@@ -2,6 +2,11 @@ export type RemoteAudienceList = {
   id: string;
   name: string;
   count?: number;
+  /** Where `count` came from: the provider's own list resource, or this tenant's last
+   *  successful sync of the list (Action Network exposes no membership count anywhere,
+   *  so its lists can only ever be counted from what we last pulled). Absent when the
+   *  provider supplied the count directly. */
+  countSource?: "last_sync";
   source: "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
 };
 
