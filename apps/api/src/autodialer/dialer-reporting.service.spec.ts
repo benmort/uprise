@@ -115,6 +115,35 @@ describe("DialerReportingService", () => {
     );
   });
 
+  it("bounds the tenant connect rate to a 90-day window rather than every attempt ever made", async () => {
+    const prisma = makePrisma();
+    const service = new DialerReportingService(prisma);
+
+    await service.tenantStats("t1", NOW);
+
+    const [{ where }] = prisma.dialerAttempt.groupBy.mock.calls[0];
+    expect(where.tenantId).toBe("t1");
+    expect(where.createdAt.gte).toEqual(new Date(NOW.getTime() - 90 * 86_400_000));
+  });
+
+  it("leads the per-campaign session and transfer reads with tenantId so the composite indexes serve them", async () => {
+    const prisma = makePrisma();
+    const service = new DialerReportingService(prisma);
+
+    await service.campaignStats("t1", "dc1", NOW);
+    await service.results("t1", "dc1");
+
+    for (const [args] of prisma.dialerCallSession.count.mock.calls) {
+      expect(args.where).toMatchObject({ tenantId: "t1", campaignId: "dc1" });
+    }
+    for (const [args] of prisma.dialerRedirect.count.mock.calls) {
+      expect(args.where).toMatchObject({ tenantId: "t1", campaignId: "dc1" });
+    }
+    expect(prisma.dialerRedirect.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: "t1", campaignId: "dc1" } }),
+    );
+  });
+
   it("lists attempts newest-first with paging", async () => {
     const prisma = makePrisma();
     prisma.dialerAttempt.count.mockResolvedValue(120);
