@@ -35,7 +35,7 @@ import { FormDialog } from "@/components/ui/form-dialog";
 import { Field } from "@/components/ui/field";
 import { TooltipHint } from "@/components/ui/tooltip-hint";
 import { useToast } from "@/components/ui/toast";
-import { useLocalStorage, PhoneInput } from "@uprise/ui";
+import { useLocalStorage, useResendCooldown, PhoneInput } from "@uprise/ui";
 import { profile } from "@uprise/api-client";
 import { FromNumberSelector } from "@/components/blasts/from-number-selector";
 import { listCampaigns } from "@/lib/api/campaigns";
@@ -173,6 +173,8 @@ export default function BlastComposerPage() {
   const [blastId, setBlastId] = useState<string | null>(null);
   const [status, setStatus] = useState("DRAFTED");
   const [proof, setProof] = useState("");
+  // Send-again cooldown for the proof button — see the button below.
+  const proofCooldown = useResendCooldown(30);
   const [proofNumber, setProofNumber] = useState("");
   // Explicit send-from number (TelephonyPhoneNumber id); null ⇒ the tenant default sender.
   const [fromNumberId, setFromNumberId] = useState<string | null>(null);
@@ -609,7 +611,12 @@ export default function BlastComposerPage() {
     }
   };
 
+  /** A sent proof is a snapshot of the draft at that moment. Any edit to what would be
+   *  sent makes it stale – drop it so the Live Preview goes back to tracking the draft. */
+  const invalidateProofSnapshot = () => setProof("");
+
   const insertTagIntoTemplate = (tag: string) => {
+    invalidateProofSnapshot();
     const textarea = templateRef.current;
     if (!textarea) {
       setTemplate((prev) => `${prev} ${tag}`.trim());
@@ -676,7 +683,7 @@ export default function BlastComposerPage() {
       <div className="space-y-4">
         <div className="space-y-3">
           <div>
-            <h1 className="text-3xl font-semibold">Write and Launch Blast Message</h1>
+            <h1 className="text-2xl font-extrabold">Write and Launch Blast Message</h1>
             <p className="text-sm text-muted-foreground">
               Build your message, verify compliance, then send or schedule.
             </p>
@@ -707,7 +714,10 @@ export default function BlastComposerPage() {
             <div className="mx-1 h-6 w-px bg-border" aria-hidden />
             <Button
               variant="outline"
-              disabled={deletingBlast}
+              // A proof is a real message to a real handset. Without a cooldown the natural
+              // response to "did that send?" is to press again, and each press costs a send —
+              // so the control says "not yet", the way the sign-in 2FA screen does.
+              disabled={deletingBlast || proofCooldown.waiting}
               onClick={async () => {
                 if (!validateDraft({ forProof: true })) return;
                 if (!proofNumber.trim()) {
@@ -729,6 +739,9 @@ export default function BlastComposerPage() {
                 const rendered = proofRes.data.previews?.[0]?.rendered || "";
                 setProof(rendered);
                 const sentTo = proofRes.data.proofDispatch?.to;
+                // Only a send that actually reached a handset starts the clock. A proof that
+                // merely rendered (no number dispatched) cost nothing and shouldn't lock the button.
+                if (sentTo) proofCooldown.start();
                 setActionMessage(sentTo ? `Proof sent to ${sentTo}` : "Proof generated");
                 showToast({
                   tone: "success",
@@ -738,7 +751,7 @@ export default function BlastComposerPage() {
               }}
             >
               <MessageSquareText className="mr-2 h-4 w-4" />
-              Send Proof
+              {proofCooldown.waiting ? `Send Proof in ${proofCooldown.remaining}s` : "Send Proof"}
             </Button>
             <Button
               id="tour-composer-send"
@@ -774,7 +787,10 @@ export default function BlastComposerPage() {
                     <button
                       key={ch}
                       type="button"
-                      onClick={() => setChannel(ch)}
+                      onClick={() => {
+                        setChannel(ch);
+                        invalidateProofSnapshot();
+                      }}
                       className={`rounded px-4 py-1.5 text-sm font-medium transition ${
                         channel === ch
                           ? "bg-primary text-primary-foreground"
@@ -831,7 +847,7 @@ export default function BlastComposerPage() {
               </select>
               {isWhatsapp && waReach ? (
                 <p className="text-xs text-muted-foreground">
-                  <span className="font-semibold text-[hsl(var(--success))]">{waReach.reachable.toLocaleString()}</span>{" "}
+                  <span className="font-semibold text-success">{waReach.reachable.toLocaleString()}</span>{" "}
                   of {waReach.total.toLocaleString()} WhatsApp-reachable (opted in)
                 </p>
               ) : null}
@@ -870,6 +886,7 @@ export default function BlastComposerPage() {
                     onChange={(e) => {
                       setContentSid(e.target.value);
                       setContentVariableMap({});
+                      invalidateProofSnapshot();
                     }}
                   >
                     <option value="">Select a template…</option>
@@ -892,9 +909,10 @@ export default function BlastComposerPage() {
                       <select
                         className="h-10 w-full rounded border border-input bg-background px-2 text-sm"
                         value={contentVariableMap[slot] || ""}
-                        onChange={(e) =>
-                          setContentVariableMap((prev) => ({ ...prev, [slot]: e.target.value }))
-                        }
+                        onChange={(e) => {
+                          setContentVariableMap((prev) => ({ ...prev, [slot]: e.target.value }));
+                          invalidateProofSnapshot();
+                        }}
                       >
                         <option value="">— pick a field —</option>
                         {availableTags.map((tag) => {
@@ -918,7 +936,10 @@ export default function BlastComposerPage() {
               ref={templateRef}
               className="min-h-[180px] w-full rounded border border-input bg-background p-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/35"
               value={template}
-              onChange={(e) => setTemplate(e.target.value)}
+              onChange={(e) => {
+                setTemplate(e.target.value);
+                invalidateProofSnapshot();
+              }}
               onDrop={(event) => {
                 event.preventDefault();
                 const tag = event.dataTransfer.getData("text/plain");
@@ -1007,7 +1028,7 @@ export default function BlastComposerPage() {
                         checked={p2p}
                         disabled={!linkedCampaignId}
                         onChange={(e) => setP2p(e.target.checked)}
-                        className="h-4 w-4 accent-[#465fff]"
+                        className="h-4 w-4 accent-primary"
                       />
                       P2P text bank — volunteers press-send each message (never auto-blasted)
                     </label>
