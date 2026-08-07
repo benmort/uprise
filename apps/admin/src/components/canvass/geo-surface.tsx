@@ -8,6 +8,7 @@ import bbox from "@turf/bbox";
 import { AU_BOUNDS, type WalkMode } from "@uprise/field";
 import { getApiUrl } from "@/lib/api";
 import type { AreaLevel, DivisionType } from "@/lib/api/geo";
+import { areaMinZoom } from "@/lib/canvass/area-limits";
 import { stateAbbrevToAsgsDigit, stateAsgsDigitToAbbrev, stateBounds } from "@/lib/canvass/states";
 import { useGeoExplorer } from "@/lib/canvass/geo-explorer-state";
 import { useTurfBasket } from "@/lib/canvass/turf-basket";
@@ -359,8 +360,9 @@ export function GeoSurface() {
     }
     if (kind === "demographics") {
       // Shade the chosen ASGS level by the chosen indicator. SA2+ paint from client rows; SA1/mb
-      // bake the value on the tile (?metric=) and floor the source zoom so a whole-country
-      // meshblock tile is never requested. Codes are state-prefixed, so the shared state filter
+      // bake the value on the tile (?metric=) and floor the source zoom (areaMinZoom, in lockstep
+      // with the API – below it /geo/tiles answers 204) so a whole-country SA1 or meshblock tile
+      // is never requested. Codes are state-prefixed, so the shared state filter
       // + code-first framing hold at every level.
       const baked = !demoClientJoin && Boolean(indicatorKey);
       const selectionBounds = code
@@ -377,7 +379,7 @@ export function GeoSurface() {
         boundaryTilesUrl: `${getApiUrl()}/geo/tiles/${demoLevel}/{z}/{x}/{y}?v=4${
           baked ? `&metric=${encodeURIComponent(indicatorKey)}` : ""
         }`,
-        boundaryMinZoom: demoLevel === "mb" ? 9 : 0,
+        boundaryMinZoom: areaMinZoom(demoLevel),
         boundaryFilter: stateDigit
           ? (["==", ["slice", ["get", "code"], 0, 1], stateDigit] as FilterSpecification)
           : undefined,
