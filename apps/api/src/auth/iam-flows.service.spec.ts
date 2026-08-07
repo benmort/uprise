@@ -37,9 +37,13 @@ function setup() {
     canvassCampaign: {
       findUnique: jest.fn(async () => null),
     },
-    // Join-hero recruitment stats (openJoinPreview). Default: none.
+    // Join-hero recruitment stats (openJoinPreview). The campaign's turf ids are resolved once,
+    // then both stats filter on them. Default: one turf, no volunteers, no doors.
+    turf: {
+      findMany: jest.fn(async () => [{ id: "turf-1" }]),
+    },
     turfAssignment: {
-      findMany: jest.fn(async () => []),
+      groupBy: jest.fn(async () => []),
     },
     doorKnock: {
       count: jest.fn(async () => 0),
@@ -1163,7 +1167,7 @@ describe("IamFlowsService", () => {
       const { svc, prisma } = setup();
       prisma.canvassCampaign.findUnique.mockResolvedValue({ ...openCampaign, status: "COMPLETED" });
       prisma.tenant.findUnique.mockResolvedValue({ name: "Org One", slug: "org-one" });
-      (prisma as any).turfAssignment = { findMany: jest.fn(async () => [{ volunteerId: "v1" }, { volunteerId: "v2" }]) };
+      (prisma as any).turfAssignment = { groupBy: jest.fn(async () => [{ volunteerId: "v1" }, { volunteerId: "v2" }]) };
       (prisma as any).doorKnock = { count: jest.fn(async () => 412) };
       const res = await svc.openJoinPreview("c1");
       expect(res).toMatchObject({ open: false, volunteerCount: 2, doorsThisWeek: 412 });
@@ -1189,7 +1193,7 @@ describe("IamFlowsService", () => {
       prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);
       prisma.tenant.findUnique.mockResolvedValue({ name: "Org One" });
       (prisma as any).turfAssignment = {
-        findMany: jest.fn(async () => [{ volunteerId: "v1" }, { volunteerId: "v2" }, { volunteerId: "v3" }]),
+        groupBy: jest.fn(async () => [{ volunteerId: "v1" }, { volunteerId: "v2" }, { volunteerId: "v3" }]),
       };
       (prisma as any).doorKnock = { count: jest.fn(async () => 128) };
       const res = await svc.openJoinPreview("c1");
@@ -1201,12 +1205,83 @@ describe("IamFlowsService", () => {
       prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);
       prisma.tenant.findUnique.mockResolvedValue({ name: "Org One" });
       (prisma as any).turfAssignment = {
-        findMany: jest.fn(async () => {
+        groupBy: jest.fn(async () => {
           throw new Error("db down");
         }),
       };
       const res = await svc.openJoinPreview("c1");
       expect(res).toMatchObject({ campaignId: "c1", volunteerCount: 0, doorsThisWeek: 0 });
+    });
+
+    // Both stats used to hang off a nested relation filter (contact → turf → campaign / turf →
+    // campaign), so Postgres walked two joins per count on a public, pre-session route. Resolving
+    // the turf ids once and filtering on them is the whole rewrite – assert the shapes, not just
+    // the numbers, or a regression to the nested filter would still pass on parity alone.
+    it("openJoinPreview resolves the campaign's turf ids once, then filters both stats by id", async () => {
+      const { svc, prisma } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);
+      prisma.tenant.findUnique.mockResolvedValue({ name: "Org One" });
+      (prisma as any).turf.findMany = jest.fn(async () => [{ id: "turf-1" }, { id: "turf-2" }]);
+      (prisma as any).turfAssignment.groupBy = jest.fn(async () => [{ volunteerId: "v1" }]);
+      (prisma as any).doorKnock.count = jest.fn(async () => 9);
+      const res = await svc.openJoinPreview("c1");
+      expect(res).toMatchObject({ volunteerCount: 1, doorsThisWeek: 9 });
+      expect((prisma as any).turf.findMany).toHaveBeenCalledWith({
+        where: { tenantId: "t1", campaignId: "c1" },
+        select: { id: true },
+      });
+      // Distinct volunteers come from a groupBy, not a materialised findMany + .length.
+      expect((prisma as any).turfAssignment.groupBy).toHaveBeenCalledWith({
+        by: ["volunteerId"],
+        where: { status: "ASSIGNED", turfId: { in: ["turf-1", "turf-2"] } },
+      });
+      expect((prisma as any).doorKnock.count.mock.calls[0][0].where).toMatchObject({
+        tenantId: "t1",
+        contact: { turfId: { in: ["turf-1", "turf-2"] } },
+      });
+    });
+
+    it("openJoinPreview skips both stat queries when the campaign has no turfs", async () => {
+      const { svc, prisma } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);
+      prisma.tenant.findUnique.mockResolvedValue({ name: "Org One" });
+      (prisma as any).turf.findMany = jest.fn(async () => []);
+      const res = await svc.openJoinPreview("c1");
+      expect(res).toMatchObject({ volunteerCount: 0, doorsThisWeek: 0 });
+      expect((prisma as any).turfAssignment.groupBy).not.toHaveBeenCalled();
+      expect((prisma as any).doorKnock.count).not.toHaveBeenCalled();
+    });
+
+    // The preview is public + pre-session, so a shared link or a crawler can hammer it with no
+    // auth in the way. 30 s of staleness on brand + social proof is the cheap half of that trade.
+    it("openJoinPreview memoises the payload for 30 s, then refetches", async () => {
+      jest.useFakeTimers();
+      try {
+        const { svc, prisma } = setup();
+        prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);
+        prisma.tenant.findUnique.mockResolvedValue({ name: "Org One", slug: "org-one" });
+        const first = await svc.openJoinPreview("c1");
+        jest.setSystemTime(Date.now() + 29_000);
+        expect(await svc.openJoinPreview("c1")).toEqual(first);
+        expect(prisma.canvassCampaign.findUnique).toHaveBeenCalledTimes(1);
+        // A different campaign is a different key – never served the neighbour's payload.
+        await svc.openJoinPreview("c2");
+        expect(prisma.canvassCampaign.findUnique).toHaveBeenCalledTimes(2);
+        jest.setSystemTime(Date.now() + 31_000);
+        expect(await svc.openJoinPreview("c1")).toEqual(first);
+        expect(prisma.canvassCampaign.findUnique).toHaveBeenCalledTimes(3);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    // An unknown id throws before anything is cached, so a probe can't fill the memo with misses.
+    it("openJoinPreview does not memoise a miss", async () => {
+      const { svc, prisma } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue(null);
+      await expect(svc.openJoinPreview("nope")).rejects.toThrow();
+      await expect(svc.openJoinPreview("nope")).rejects.toThrow();
+      expect(prisma.canvassCampaign.findUnique).toHaveBeenCalledTimes(2);
     });
 
     it("accept verifies the OTP, then creates a VOLUNTEER membership + session immediately (no approval)", async () => {
@@ -1365,6 +1440,18 @@ describe("IamFlowsService", () => {
           createdAt: "2026-07-01T00:00:00.000Z",
         },
       ]);
+    });
+
+    // A review queue, not an export. Unbounded, this read scanned every pending row; the bound IS
+    // the fix, and it only makes sense paired with newest-first (a reviewer works the recent end).
+    it("listPendingSignups reads the newest 200 only – never the whole pending table", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenantJoinRequest.findMany = jest.fn(async () => []);
+      prisma.user.findMany = jest.fn(async () => []);
+      await svc.listPendingSignups();
+      expect(prisma.tenantJoinRequest.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 200, orderBy: { createdAt: "desc" } }),
+      );
     });
 
     it("approveSignup mints the OWNER membership via approveJoinRequest", async () => {
