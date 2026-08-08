@@ -575,6 +575,17 @@ export async function listBlasts() {
   return request<Array<Record<string, unknown>>>("/blasts");
 }
 
+/**
+ * One blast by id.
+ *
+ * `listBlasts` is capped at 100 rows server-side and ignores pagination, so resolving a blast by
+ * scanning it made every older blast read as "not found" — at a URL naming a real blast, with an
+ * empty form whose first autosave then created a duplicate draft.
+ */
+export async function getBlast(blastId: string) {
+  return request<Record<string, unknown>>(`/blasts/${encodeURIComponent(blastId)}`);
+}
+
 export type WhatsappTemplate = {
   id: string;
   contentSid: string;

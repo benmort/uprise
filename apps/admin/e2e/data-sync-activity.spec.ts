@@ -52,12 +52,19 @@ async function stubActivity(
   opts: { onPatch?: (body: Record<string, unknown>) => void; onRetry?: () => void } = {},
 ) {
   let pushEnabled = true;
+  // Mirror the server's stored streams so the stub can merge like the real service does.
+  let streams: Record<string, boolean> = { textReplies: false };
   await page.route(/\/integrations\/connections$/, (route) => route.fulfill(json([connection(pushEnabled)])));
   await page.route(/\/integrations\/connections\/[^/]+\/settings$/, (route) => {
     const body = JSON.parse(route.request().postData() || "{}");
     opts.onPatch?.(body);
     if (body?.push?.enabled !== undefined) pushEnabled = body.push.enabled;
-    return route.fulfill(json({ push: { enabled: pushEnabled } }));
+    streams = { ...streams, ...((body?.push?.streams as Record<string, boolean>) ?? {}) };
+    // FAITHFUL to updateDataSyncSettings, which returns the whole merged `next` — enabled AND the
+    // full streams map. The stub used to return `{ push: { enabled } }` only, which is a shape the
+    // server never produces; a card that (correctly) renders from this response would have looked
+    // broken against the stub and fine in production.
+    return route.fulfill(json({ push: { enabled: pushEnabled, streams } }));
   });
   // Pull card needs its list search to settle.
   await page.route(/\/integrations\/lists\/search/, (route) => route.fulfill(json({ lists: [] })));
@@ -89,9 +96,18 @@ test.describe("Data sync activity", () => {
     await expect(optOuts).toBeDisabled();
 
     // Turning a stream off PATCHes exactly that stream.
-    await card.getByRole("switch", { name: "Survey answers" }).click();
+    const surveyAnswers = card.getByRole("switch", { name: "Survey answers" });
+    await expect(surveyAnswers).toHaveAttribute("aria-checked", "true");
+    await surveyAnswers.click();
     await expect.poll(() => patches.length, { timeout: 10_000 }).toBeGreaterThan(0);
     expect(patches[0]).toEqual({ push: { streams: { surveyAnswers: false } } });
+
+    // ...and the switch REFLECTS it. This is the assertion the suite was missing: the card used to
+    // render straight off a prop the parent holds in plain useState and only called
+    // invalidateApi("/integrations/connections") after saving — a no-op on this page, since no
+    // useApi holder of that key is mounted here. The PATCH persisted and the switch never moved,
+    // so a second click PATCHed it straight back on. Asserting the request alone could not see it.
+    await expect(surveyAnswers).toHaveAttribute("aria-checked", "false");
   });
 
   test("a FAILED delivery shows its reason and Retry flips it back to QUEUED", async ({ page }) => {

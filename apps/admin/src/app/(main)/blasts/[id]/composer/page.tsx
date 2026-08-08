@@ -10,7 +10,7 @@ import {
   getAudienceContacts,
   getAudienceWhatsappReach,
   getFeatureFlags,
-  listBlasts,
+  getBlast,
   listAudiences,
   listWhatsappTemplates,
   markBlastProofed,
@@ -23,6 +23,7 @@ import {
 } from "@/lib/api";
 import { tourComposerIntent } from "@/lib/tours/uprise-tour";
 import { buildBlastPayload } from "@/lib/blasts/blast-payload";
+import { replacementAudienceId, shouldReplaceAudience } from "@/lib/blasts/audience-selection";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -245,21 +246,19 @@ export default function BlastComposerPage() {
     if (!blastIdFromRoute) return;
     setLoadingBlast(true);
     setNoPermission(false);
-    listBlasts().then((res) => {
+    // Fetch THIS blast by id. It used to scan listBlasts(), which the API caps at 100 rows and
+    // which ignores pagination — so any blast past the hundredth read as "not found" at a URL
+    // naming a real blast, rendered an empty form, and the first autosave took the `if (!blastId)`
+    // branch and created a duplicate draft.
+    getBlast(blastIdFromRoute).then((res) => {
       if (!res.ok) {
         if (res.status === 403) setNoPermission(true);
+        else if (res.status === 404) setActionMessage(`Blast not found: ${blastIdFromRoute}`);
         else setActionMessage(res.error);
         setLoadingBlast(false);
         return;
       }
-      const blast = res.data.find((row) => String((row as any).id) === blastIdFromRoute) as
-        | Record<string, unknown>
-        | undefined;
-      if (!blast) {
-        setActionMessage(`Blast not found: ${blastIdFromRoute}`);
-        setLoadingBlast(false);
-        return;
-      }
+      const blast = res.data;
       setBlastId(String(blast.id));
       setCampaignName(String(blast.title || ""));
       setAudienceId(String(blast.audienceId || ""));
@@ -350,12 +349,19 @@ export default function BlastComposerPage() {
   }, [isWhatsapp, audienceId]);
 
   // If the current selection isn't a WhatsApp audience, fall back to the first valid one.
+  //
+  // `audiences.length > 0` is load-bearing. Opening a saved WhatsApp blast resolves the blast
+  // BEFORE the audience list arrives: `setChannel("WHATSAPP")` flips `isWhatsapp`, this effect
+  // re-runs against an empty `visibleAudiences`, `some(...)` is false, and it wiped the blast's own
+  // audienceId. The list then landed and `setAudienceId(prev => prev || first)` read that blank and
+  // pointed the blast at whatever audience happened to be first — which autosave then persisted.
+  // An empty list means "not loaded yet", not "no valid audiences".
   useEffect(() => {
-    if (!isWhatsapp || !audienceId) return;
-    if (!visibleAudiences.some((a) => String(a.id) === audienceId)) {
-      setAudienceId(visibleAudiences[0] ? String(visibleAudiences[0].id) : "");
+    const validIds = visibleAudiences.map((a) => String(a.id));
+    if (shouldReplaceAudience({ isWhatsapp, selectedId: audienceId, validIds, loaded: audiences.length > 0 })) {
+      setAudienceId(replacementAudienceId(validIds));
     }
-  }, [isWhatsapp, visibleAudiences, audienceId]);
+  }, [isWhatsapp, visibleAudiences, audienceId, audiences.length]);
 
   const selectedTemplate = useMemo(
     () => waTemplates.find((t) => t.contentSid === contentSid) || null,

@@ -165,6 +165,23 @@ export class BlastsService {
     return blast;
   }
 
+  /**
+   * One blast by id, tenant-scoped, in the same shape `listBlasts` returns.
+   *
+   * The composer had no way to fetch a single blast, so it resolved one by scanning `listBlasts`
+   * — which hardcodes `take: 100` and ignores pagination entirely. Past a hundred blasts, opening
+   * an older one showed "Blast not found" at a URL naming a real blast, rendered an empty form,
+   * and the first autosave took the `if (!blastId)` branch and created a DUPLICATE draft.
+   */
+  async getBlast(tenantId: string, id: string) {
+    const blast = await this.prisma.blast.findFirst({
+      where: { id, tenantId },
+      include: { _count: { select: { recipients: true } } },
+    });
+    if (!blast) throw new NotFoundException("Blast not found");
+    return blast;
+  }
+
   // Tenant-scoped loader — every HTTP entry point (update/delete/proof/schedule/send/retry)
   // must load through this so a caller can't act on another tenant's blast by id.
   private async getBlastForTenant(tenantId: string, id: string) {

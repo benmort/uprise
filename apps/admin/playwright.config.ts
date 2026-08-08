@@ -111,9 +111,18 @@ export default defineConfig({
         },
         {
           command: "npm run dev",
-          // /login was removed in the doc-14 cutover; the root 307-redirects when
-          // unauthenticated, which Playwright accepts as "ready".
-          url: WEB,
+          // Probe /api/health, NOT the root.
+          //
+          // The root 307-redirects an unauthenticated request to the auth app, and Playwright
+          // follows that redirect when deciding readiness — so the probe's verdict depended on a
+          // DIFFERENT host being up. On a machine whose NEXT_PUBLIC_AUTH_APP_URL points at the
+          // *.dev.uprise.org.au tunnel, an already-running admin was judged not-ready, Playwright
+          // booted a second one, `next dev` (no -p here) walked 3000→3009 because the real admin
+          // held 3000, and the suite died on "Timed out waiting 120000ms" without running a test.
+          //
+          // /api/health is local, returns 200, never redirects, and is excluded from the
+          // middleware matcher precisely so a probe reaches the function.
+          url: `${WEB}/api/health`,
           reuseExistingServer: true,
           timeout: WEBSERVER_TIMEOUT_MS,
         },
@@ -130,10 +139,12 @@ export default defineConfig({
           timeout: WEBSERVER_TIMEOUT_MS,
         },
         {
-          // The canvasser PWA. Its root 307-redirects when unauthenticated (SSO gate), which
-          // Playwright accepts as "ready".
+          // The canvasser PWA. Same as admin above: probe /api/health rather than the root, whose
+          // SSO 307 sends Playwright's readiness check to the auth app on another host. Judged
+          // not-ready, Playwright booted a second field server that died on EADDRINUSE :::3005 and
+          // took the run with it ("Process from config.webServer exited early").
           command: "npm --prefix ../field run dev",
-          url: FIELD_URL,
+          url: `${FIELD_URL}/api/health`,
           reuseExistingServer: true,
           timeout: WEBSERVER_TIMEOUT_MS,
         },

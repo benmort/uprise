@@ -14,10 +14,19 @@ describe("BlastsController", () => {
     dispatchDueScheduled: jest.fn().mockResolvedValue({}),
     requestRetryFailed: jest.fn().mockResolvedValue({}),
     listBlasts: jest.fn().mockResolvedValue([]),
+    getBlast: jest.fn().mockResolvedValue({}),
   } as any;
   const c = new BlastsController(svc);
 
   afterEach(() => jest.clearAllMocks());
+
+  // The composer used to resolve a blast by scanning listBlasts, which the service caps at 100
+  // rows and which ignores pagination — so any blast past the hundredth read as "not found" at a
+  // URL naming a real one, and the first autosave created a duplicate draft.
+  it("get delegates to getBlast with tenantId + id", async () => {
+    await c.get("t1", "b1");
+    expect(svc.getBlast).toHaveBeenCalledWith("t1", "b1");
+  });
 
   it("create delegates to createDraft with tenantId", async () => {
     await c.create("t1", { subject: "x" } as any);
@@ -77,5 +86,37 @@ describe("BlastsController", () => {
   it("list passes the campaignId filter through as a where clause", async () => {
     await c.list("t1", { campaignId: "c1" } as any);
     expect(svc.listBlasts).toHaveBeenCalledWith("t1", { campaignId: "c1" });
+  });
+});
+
+/**
+ * Route ORDER, not just delegation.
+ *
+ * Nest matches in declaration order, so a parameterised `@Get(":id")` declared above a literal
+ * `@Get("dispatch-due")` swallows it — the cron would hit getBlast with id="dispatch-due" and
+ * 404, silently, with no scheduled blast ever dispatching. Reflect the metadata rather than trust
+ * the reading.
+ */
+describe("BlastsController route order", () => {
+  it("declares every literal GET before the parameterised one", () => {
+    const proto = BlastsController.prototype as unknown as Record<string, unknown>;
+    const getPaths: string[] = [];
+    for (const name of Object.getOwnPropertyNames(proto)) {
+      if (name === "constructor") continue;
+      const handler = proto[name];
+      if (typeof handler !== "function") continue;
+      const method = Reflect.getMetadata("method", handler);
+      // 0 is RequestMethod.GET.
+      if (method !== 0) continue;
+      getPaths.push(String(Reflect.getMetadata("path", handler) ?? ""));
+    }
+    const paramIndex = getPaths.findIndex((p) => p.startsWith(":"));
+    if (paramIndex === -1) return; // no parameterised GET — nothing to shadow
+    // `/` (the bare collection route) is NOT shadowed by `:id` — Nest matches the empty segment
+    // exactly. Only a named literal segment after the param would be swallowed.
+    const shadowed = getPaths
+      .slice(paramIndex + 1)
+      .filter((p) => p && p !== "/" && !p.startsWith(":"));
+    expect(shadowed).toEqual([]);
   });
 });

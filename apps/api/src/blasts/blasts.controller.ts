@@ -76,6 +76,18 @@ export class BlastsController {
     return this.blasts.requestRetryFailed(tenantId, id);
   }
 
+  /**
+   * One blast by id. Declared AFTER the literal "dispatch-due" route above so that path is not
+   * swallowed by this parameterised one.
+   *
+   * Exists because the composer used to find a blast by scanning the capped list — see getBlast.
+   */
+  @Get(":id")
+  @RequirePermission(READ)
+  get(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.blasts.getBlast(tenantId, id);
+  }
+
   @Get()
   @RequirePermission(READ)
   list(@TenantId() tenantId: string, @Query() dto: ListBlastsDto) {

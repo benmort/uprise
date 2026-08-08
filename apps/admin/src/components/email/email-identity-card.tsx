@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@uprise/ui";
 import { getFeatureFlags } from "@/lib/api";
 import { getSession } from "@/lib/session";
+import { resolveTenantId } from "@/lib/active-tenant";
 import {
   EMAIL_TIMELINE_CURRENT_STEP,
   EMAIL_TIMELINE_STEPS,
@@ -45,7 +46,11 @@ export function EmailIdentityCard({ tenantId: tenantIdProp }: { tenantId?: strin
         setLoading(false);
         return;
       }
-      const tenantId = tenantIdProp ?? (await getSession())?.activeTenant?.id;
+      // `activeTenant` is set ONLY for a super-admin acting as a tenant they aren't a member of
+      // ("Null for ordinary users" — AuthPrincipal), so reading it alone left every ordinary owner
+      // with no tenant id: this card returned before fetching and their email identity never
+      // appeared. resolveTenantId has the precedence, tested.
+      const tenantId = resolveTenantId(await getSession(), tenantIdProp);
       if (!tenantId) {
         if (alive) setLoading(false);
         return;

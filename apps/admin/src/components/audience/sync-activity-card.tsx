@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   integrations,
   type IntegrationDataSyncSettings,
@@ -8,6 +8,7 @@ import {
   type SyncStreamKey,
 } from "@uprise/api-client";
 import { useApi, invalidateApi } from "@/lib/use-api";
+import { applyPushResponse, parsePushSettings, type PushSettings } from "@/lib/integrations/push-settings";
 import {
   canRetryDelivery,
   deriveDeliveryBadge,
@@ -59,7 +60,17 @@ export function SyncActivityCard({ connections }: { connections: IntegrationConn
 
   // The stored settings ride the connection row's settings JSON; parse the push half
   // with safe defaults matching the api's parser.
-  const settings = useMemo(() => parsePushSettings(active?.settings), [active]);
+  // Rendered from LOCAL state, not straight off the prop.
+  //
+  // `connections` is a plain useState array in the parent, so the old `invalidateApi(...)` after a
+  // save reached nothing (no useApi holder of that key is mounted here) and the switch never moved
+  // while a green toast claimed it had. The API returns the saved settings, so each save folds the
+  // response in — see applyPushResponse.
+  const [settings, setSettings] = useState<PushSettings>(() => parsePushSettings(active?.settings));
+  // Re-seed when the organiser picks a different connection (or the parent reloads them).
+  useEffect(() => {
+    setSettings(parsePushSettings(active?.settings));
+  }, [active?.id, active?.settings]);
 
   const toggleStream = async (key: SyncStreamKey, next: boolean) => {
     if (!active) return;
@@ -70,6 +81,8 @@ export function SyncActivityCard({ connections }: { connections: IntegrationConn
       showToast({ tone: "error", title: "Couldn't save the setting", description: res.error });
       return;
     }
+    setSettings((prev) => applyPushResponse(prev, res.data));
+    // Keeps any OTHER surface holding this key honest; the switch above no longer depends on it.
     invalidateApi("/integrations/connections");
   };
 
@@ -82,6 +95,7 @@ export function SyncActivityCard({ connections }: { connections: IntegrationConn
       showToast({ tone: "error", title: "Couldn't save the setting", description: res.error });
       return;
     }
+    setSettings((prev) => applyPushResponse(prev, res.data));
     invalidateApi("/integrations/connections");
     showToast({
       tone: "success",
@@ -253,23 +267,3 @@ export function SyncActivityCard({ connections }: { connections: IntegrationConn
 }
 
 /** The stored push settings with the api parser's defaults (absent blob = fresh connection). */
-function parsePushSettings(settings: Record<string, unknown> | null | undefined): {
-  enabled: boolean;
-  streams: Record<SyncStreamKey, boolean>;
-} {
-  const push =
-    settings && typeof settings === "object"
-      ? ((settings as { dataSync?: { push?: Partial<IntegrationDataSyncSettings["push"]> } }).dataSync?.push ?? {})
-      : {};
-  const streams = (push.streams ?? {}) as Partial<Record<SyncStreamKey, boolean>>;
-  return {
-    enabled: push.enabled === true,
-    streams: {
-      dispositions: streams.dispositions !== false,
-      surveyAnswers: streams.surveyAnswers !== false,
-      tags: streams.tags !== false,
-      textReplies: streams.textReplies === true,
-      rsvps: streams.rsvps !== false,
-    },
-  };
-}

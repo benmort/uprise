@@ -24,6 +24,7 @@ import { request as apiClientRequest } from "@uprise/api-client";
 import {
   deleteIntegrationConnection,
   deleteTurf,
+  getBlast,
   deleteWalkList,
   getTurfRoute,
   getQaReview,
@@ -71,6 +72,16 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 beforeEach(() => mockRequest.mockClear());
 
 describe("canvass turf wrappers", () => {
+  /**
+   * The composer used to resolve a blast by scanning listBlasts(), which the API caps at 100 rows
+   * and which ignores pagination — so any blast past the hundredth read as "not found" at a URL
+   * naming a real blast, and the first autosave then created a duplicate draft.
+   */
+  it("getBlast GETs the encoded single-blast path", async () => {
+    await getBlast("b 1");
+    expect(mockRequest).toHaveBeenCalledWith("/blasts/b%201", undefined);
+  });
+
   it("deleteTurf DELETEs the encoded turf path", async () => {
     await deleteTurf("t 1");
     expect(mockRequest).toHaveBeenCalledWith("/canvass/turfs/t%201", { method: "DELETE" });
