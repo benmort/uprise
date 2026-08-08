@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, Inbox, Send, SkipForward } from "lucide-react";
 import { Button, EmptyState, Skeleton, Spinner, StatusBadge, cn, useToast } from "@uprise/ui";
 import { searchContacts } from "../api/contacts";
+import { resolveActiveConversationPhone } from "../lib/active-conversation";
 import {
   recordTextingDisposition,
   recordTextingSurveyAnswer,
@@ -94,7 +95,11 @@ export function TextSession() {
   // Reply half — after initial sends are exhausted, work owned conversations.
   const conversations = queue?.conversations ?? [];
   const [activePhone, setActivePhone] = useState<string | null>(null);
-  const phone = current ? null : (activePhone ?? conversations[0]?.contactPhone ?? null);
+  const phone = resolveActiveConversationPhone({
+    hasPendingSend: Boolean(current),
+    tappedPhone: activePhone,
+    conversations,
+  });
   const { data: thread, refetch: refetchThread } = useTextingThread(phone);
   const [draft, setDraft] = useState("");
   const [replySending, setReplySending] = useState(false);
@@ -123,13 +128,21 @@ export function TextSession() {
     }
   }, []);
 
-  const openConversation = useCallback(
-    (p: string) => {
-      setActivePhone(p);
-      void hydrateContact(p);
-    },
-    [hydrateContact],
-  );
+  const openConversation = useCallback((p: string) => setActivePhone(p), []);
+
+  /**
+   * Hydrate from the phone the screen is SHOWING, not the one that was tapped.
+   *
+   * hydrateContact used to be called only from openConversation, so the conversation the screen
+   * auto-selects on arrival (the first in the queue, when nothing has been tapped) had no contact
+   * id behind it: readable, repliable, and impossible to log a disposition or survey answer
+   * against. Keying the hydration to `phone` makes the contact id follow whatever is on screen —
+   * including that first one, and including a switch driven by the poll.
+   */
+  useEffect(() => {
+    if (!phone) return;
+    void hydrateContact(phone);
+  }, [phone, hydrateContact]);
 
   const pressSend = useCallback(async () => {
     if (!current || sending) return;

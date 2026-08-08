@@ -126,6 +126,15 @@ export default function AudienceShowPage() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
+    /**
+     * Ignore a response whose request has been superseded.
+     *
+     * This effect re-runs on every keystroke in the search box, and nothing cancelled the
+     * previous fetch — so a slow response for "smi" landing after a fast one for "smith"
+     * overwrote the table with results for a query the organiser had already moved past. The
+     * search box said one thing and the rows said another, with no way to tell which was stale.
+     */
+    let alive = true;
     Promise.all([
       getAudience(id),
       getAudienceContacts(id, {
@@ -135,6 +144,7 @@ export default function AudienceShowPage() {
       }),
     ])
       .then(([audienceRes, contactsRes]) => {
+        if (!alive) return;
         if (!audienceRes.ok) {
           setError(audienceRes.error);
           setAudience(null);
@@ -151,7 +161,12 @@ export default function AudienceShowPage() {
           setContactsTotal(Number(contactsRes.data.total || 0));
         }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, [id, page, query]);
 
   return (

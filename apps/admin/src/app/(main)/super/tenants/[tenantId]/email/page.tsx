@@ -144,8 +144,13 @@ export default function TenantEmailPage() {
   };
 
   const declineRequest = async (id: string) => {
-    const reason = window.prompt("Reason (shown to the tenant owner):") ?? undefined;
-    const res = await emailProvisioning.declineRequest(id, reason);
+    // `prompt` returns null when the operator presses Cancel and "" when they press OK on an
+    // empty box. `?? undefined` collapsed those into the same value, so backing out of the
+    // reason box still declined the tenant's request — an irreversible action from the gesture
+    // that means "don't". Cancel now aborts; OK-with-blank still declines, without a reason.
+    const reason = window.prompt("Reason (shown to the tenant owner):");
+    if (reason === null) return;
+    const res = await emailProvisioning.declineRequest(id, reason.trim() || undefined);
     if (!res.ok) setActionError(res.error);
     await load();
   };

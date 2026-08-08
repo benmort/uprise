@@ -354,7 +354,20 @@ export class AudiencesService {
           tenantId,
           audienceId: id,
         },
-        orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
+        /**
+         * Newest job WINS, by creation — not by completion.
+         *
+         * `completedAt DESC` looks like "most recent sync" and is the opposite in Postgres, where
+         * DESC sorts NULLS FIRST. A job that never completed — the stranded QUEUED import this
+         * card exists to surface — has completedAt NULL, so it outranked every later job and kept
+         * outranking them: an organisation could sync successfully a dozen times and the audience
+         * would still report the months-old stuck import as its latest sync.
+         *
+         * createdAt is the honest key. It is monotonic, and it keeps a genuinely in-flight sync on
+         * top (where the card needs it to show progress) without letting a dead one sit there
+         * forever. `id` breaks ties within the same millisecond so the answer is deterministic.
+         */
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       }),
     ]);
     if (!audience) {

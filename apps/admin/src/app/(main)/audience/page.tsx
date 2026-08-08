@@ -125,6 +125,8 @@ export default function AudiencePage() {
   const [loadingError, setLoadingError] = useState("");
   const [filter, setFilter] = useState("");
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  // In-flight guard for the CSV upload — see the onClick below.
+  const [uploading, setUploading] = useState(false);
   const [audienceName, setAudienceName] = useState("");
   const [newChannel, setNewChannel] = useState<AudienceChannel>("ALL");
   const [creatingSmart, setCreatingSmart] = useState(false);
@@ -260,158 +262,168 @@ export default function AudiencePage() {
               </Select>
               <Button
                 onClick={async () => {
-                  if (!audienceName.trim()) {
-                    setValidationMessage("Audience name is required before upload.");
-                    return;
-                  }
-                  if (!csvFile) {
-                    setValidationMessage("Choose a CSV file before upload.");
-                    return;
-                  }
-                  setValidationMessage("");
-                  const trimmedName = audienceName.trim();
-                  setImportMessage("");
-                  const created = await createAudience({ name: trimmedName, source: "CSV", channel: newChannel });
-                  if (!created.ok) {
-                    setImportMessage(created.error);
-                    showToast({
-                      tone: "error",
-                      title: "Could not create audience",
-                      description: created.error,
-                    });
-                    return;
-                  }
-                  const audienceId = String((created.data as any).id);
-                  setRows((prev) => [
-                    {
-                      id: audienceId,
-                      name: trimmedName,
-                      source: "CSV",
-                      channel: newChannel,
+                  // A second click before the first upload resolves created a SECOND audience with the
+                  // same name and imported the CSV into it again — the button stayed enabled for the whole
+                  // upload, because name and file are only cleared at the very end. Double-submitting a
+                  // contact import is expensive to undo, so guard the click itself, not just the styling.
+                  if (uploading) return;
+                  setUploading(true);
+                  try {
+                    if (!audienceName.trim()) {
+                      setValidationMessage("Audience name is required before upload.");
+                      return;
+                    }
+                    if (!csvFile) {
+                      setValidationMessage("Choose a CSV file before upload.");
+                      return;
+                    }
+                    setValidationMessage("");
+                    const trimmedName = audienceName.trim();
+                    setImportMessage("");
+                    const created = await createAudience({ name: trimmedName, source: "CSV", channel: newChannel });
+                    if (!created.ok) {
+                      setImportMessage(created.error);
+                      showToast({
+                        tone: "error",
+                        title: "Could not create audience",
+                        description: created.error,
+                      });
+                      return;
+                    }
+                    const audienceId = String((created.data as any).id);
+                    setRows((prev) => [
+                      {
+                        id: audienceId,
+                        name: trimmedName,
+                        source: "CSV",
+                        channel: newChannel,
+                        status: "UPLOADING",
+                        _count: { contacts: 0 },
+                      },
+                      ...prev.filter((row) => row.id !== audienceId),
+                    ]);
+                    setTablePage(0);
+                    setUploadState({
+                      audienceId,
+                      audienceName: trimmedName,
+                      progress: 0,
                       status: "UPLOADING",
-                      _count: { contacts: 0 },
-                    },
-                    ...prev.filter((row) => row.id !== audienceId),
-                  ]);
-                  setTablePage(0);
-                  setUploadState({
-                    audienceId,
-                    audienceName: trimmedName,
-                    progress: 0,
-                    status: "UPLOADING",
-                  });
-                  const imported = await importAudienceCsv(audienceId, csvFile, (percent) => {
-                    setUploadState((prev) => {
-                      if (!prev || prev.audienceId !== audienceId) return prev;
-                      const progress = clampProgress((percent / 100) * FILE_UPLOAD_PROGRESS_WEIGHT);
-                      if (percent >= 100) {
+                    });
+                    const imported = await importAudienceCsv(audienceId, csvFile, (percent) => {
+                      setUploadState((prev) => {
+                        if (!prev || prev.audienceId !== audienceId) return prev;
+                        const progress = clampProgress((percent / 100) * FILE_UPLOAD_PROGRESS_WEIGHT);
+                        if (percent >= 100) {
+                          return {
+                            ...prev,
+                            status: "PROCESSING",
+                            progress: Math.max(prev.progress, FILE_UPLOAD_PROGRESS_WEIGHT),
+                          };
+                        }
                         return {
                           ...prev,
-                          status: "PROCESSING",
-                          progress: Math.max(prev.progress, FILE_UPLOAD_PROGRESS_WEIGHT),
+                          status: "UPLOADING",
+                          progress: Math.max(prev.progress, progress),
                         };
-                      }
-                      return {
-                        ...prev,
-                        status: "UPLOADING",
-                        progress: Math.max(prev.progress, progress),
-                      };
+                      });
                     });
-                  });
-                  if (imported.ok) {
-                    const initialImport = imported.data as AudienceImportProgress;
-                    const initialStatus = initialImport.status || "RUNNING";
-                    const importId = initialImport.importId || "";
-                    setUploadState((prev) => {
-                      const previousProgress = prev?.audienceId === audienceId ? prev.progress : 0;
-                      return getUploadStateFromImport(
-                        audienceId,
-                        trimmedName,
-                        initialImport,
-                        previousProgress,
-                      );
-                    });
+                    if (imported.ok) {
+                      const initialImport = imported.data as AudienceImportProgress;
+                      const initialStatus = initialImport.status || "RUNNING";
+                      const importId = initialImport.importId || "";
+                      setUploadState((prev) => {
+                        const previousProgress = prev?.audienceId === audienceId ? prev.progress : 0;
+                        return getUploadStateFromImport(
+                          audienceId,
+                          trimmedName,
+                          initialImport,
+                          previousProgress,
+                        );
+                      });
 
-                    let terminal = initialImport;
-                    if (importId && initialStatus !== "SUCCEEDED" && initialStatus !== "FAILED") {
-                      for (let attempt = 0; attempt < 120; attempt += 1) {
-                        await new Promise((resolve) => window.setTimeout(resolve, 1500));
-                        const statusRes = await getAudienceImportStatus(audienceId, importId);
-                        if (!statusRes.ok) {
-                          if (attempt === 119) {
-                            setImportMessage(statusRes.error);
+                      let terminal = initialImport;
+                      if (importId && initialStatus !== "SUCCEEDED" && initialStatus !== "FAILED") {
+                        for (let attempt = 0; attempt < 120; attempt += 1) {
+                          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+                          const statusRes = await getAudienceImportStatus(audienceId, importId);
+                          if (!statusRes.ok) {
+                            if (attempt === 119) {
+                              setImportMessage(statusRes.error);
+                            }
+                            continue;
                           }
-                          continue;
+                          terminal = statusRes.data;
+                          const status = terminal.status || "RUNNING";
+                          setUploadState((prev) => {
+                            if (!prev || prev.audienceId !== audienceId) return prev;
+                            return getUploadStateFromImport(
+                              audienceId,
+                              trimmedName,
+                              terminal,
+                              prev.progress,
+                            );
+                          });
+                          if (status === "SUCCEEDED" || status === "FAILED") break;
                         }
-                        terminal = statusRes.data;
-                        const status = terminal.status || "RUNNING";
-                        setUploadState((prev) => {
-                          if (!prev || prev.audienceId !== audienceId) return prev;
-                          return getUploadStateFromImport(
-                            audienceId,
-                            trimmedName,
-                            terminal,
-                            prev.progress,
-                          );
-                        });
-                        if (status === "SUCCEEDED" || status === "FAILED") break;
                       }
-                    }
 
-                    const terminalStatus = terminal.status || "";
-                    if (terminalStatus === "FAILED") {
-                      const summary = String(terminal.errorSummary || "Import failed.");
-                      setImportMessage(summary);
+                      const terminalStatus = terminal.status || "";
+                      if (terminalStatus === "FAILED") {
+                        const summary = String(terminal.errorSummary || "Import failed.");
+                        setImportMessage(summary);
+                        showToast({
+                          tone: "error",
+                          title: "Audience import failed",
+                          description: summary,
+                        });
+                      } else if (terminalStatus === "SUCCEEDED") {
+                        const importedRows = Number(terminal.importedRows || 0);
+                        const failedRows = Number(terminal.failedRows || 0);
+                        setImportMessage(
+                          `Imported ${importedRows.toLocaleString()} subscribers${
+                            failedRows > 0 ? ` (${failedRows.toLocaleString()} failed rows)` : ""
+                          }.`,
+                        );
+                        showToast({
+                          tone: "success",
+                          title: "Audience import completed",
+                          description: `${importedRows.toLocaleString()} subscribers imported.`,
+                        });
+                      } else {
+                        setImportMessage("Import is still processing in the background. Refresh to check latest status.");
+                      }
+
+                      setAudienceName("");
+                      setCsvFile(null);
+                      await refresh();
+                      if (terminalStatus === "SUCCEEDED" || terminalStatus === "FAILED") {
+                        setUploadState(null);
+                      }
+                    } else {
+                      setUploadState((prev) =>
+                        prev && prev.audienceId === audienceId
+                          ? { ...prev, progress: 100, status: "FAILED" }
+                          : prev,
+                      );
+                      setRows((prev) =>
+                        prev.map((row) =>
+                          row.id === audienceId ? { ...row, status: "FAILED" } : row,
+                        ),
+                      );
+                      setImportMessage(imported.error);
                       showToast({
                         tone: "error",
                         title: "Audience import failed",
-                        description: summary,
+                        description: imported.error,
                       });
-                    } else if (terminalStatus === "SUCCEEDED") {
-                      const importedRows = Number(terminal.importedRows || 0);
-                      const failedRows = Number(terminal.failedRows || 0);
-                      setImportMessage(
-                        `Imported ${importedRows.toLocaleString()} subscribers${
-                          failedRows > 0 ? ` (${failedRows.toLocaleString()} failed rows)` : ""
-                        }.`,
-                      );
-                      showToast({
-                        tone: "success",
-                        title: "Audience import completed",
-                        description: `${importedRows.toLocaleString()} subscribers imported.`,
-                      });
-                    } else {
-                      setImportMessage("Import is still processing in the background. Refresh to check latest status.");
                     }
-
-                    setAudienceName("");
-                    setCsvFile(null);
-                    await refresh();
-                    if (terminalStatus === "SUCCEEDED" || terminalStatus === "FAILED") {
-                      setUploadState(null);
-                    }
-                  } else {
-                    setUploadState((prev) =>
-                      prev && prev.audienceId === audienceId
-                        ? { ...prev, progress: 100, status: "FAILED" }
-                        : prev,
-                    );
-                    setRows((prev) =>
-                      prev.map((row) =>
-                        row.id === audienceId ? { ...row, status: "FAILED" } : row,
-                      ),
-                    );
-                    setImportMessage(imported.error);
-                    showToast({
-                      tone: "error",
-                      title: "Audience import failed",
-                      description: imported.error,
-                    });
+                  } finally {
+                    setUploading(false);
                   }
                 }}
-                disabled={!audienceName.trim() || !csvFile}
+                disabled={uploading || !audienceName.trim() || !csvFile}
               >
-                Upload CSV
+                {uploading ? "Uploading…" : "Upload CSV"}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">

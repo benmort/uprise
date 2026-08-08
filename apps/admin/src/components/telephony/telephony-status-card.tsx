@@ -20,11 +20,12 @@ import { ProvisionNumberDialog } from "./provision-number-dialog";
 import { LockedAction } from "@/components/setup/locked-action";
 import { useSetupGate } from "@/components/setup/use-setup-state";
 import { isVoicePurpose } from "@/lib/telephony/number-purpose";
+import { isRunLive, isRunSettled } from "@/lib/telephony/run-state";
 
 type RunWithSteps = TelephonyProvisioningRun & { steps: TelephonyProvisioningStep[] };
 
 const LIVE_POLL_MS = 5_000;
-const TERMINAL = new Set(["ACTIVE", "FAILED"]);
+
 
 /**
  * The number outbound calls originate from.
@@ -108,7 +109,7 @@ export function TelephonyStatusCard({
   }, [load]);
 
   // Poll while a run is in flight so the chip/progress track the automation live.
-  const runLive = Boolean(latestRun && !TERMINAL.has(latestRun.status));
+  const runLive = isRunLive(latestRun?.status);
   useEffect(() => {
     if (!runLive || !latestRun) return;
     const id = setInterval(() => {
@@ -116,7 +117,7 @@ export function TelephonyStatusCard({
         if (!res.ok) return;
         setLatestRun(res.data);
         // A finished run changes the numbers list too (purchase → ACTIVE).
-        if (TERMINAL.has(res.data.status)) void load();
+        if (isRunSettled(res.data.status)) void load();
       });
     }, LIVE_POLL_MS);
     return () => clearInterval(id);
