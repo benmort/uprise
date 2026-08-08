@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect } from "@playwright/test";
 
 /**
  * Auth e2e against the doc-14 cookie/SSO model. The global storageState (set in

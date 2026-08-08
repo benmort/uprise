@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect, type Page } from "@playwright/test";
 
 /**
  * Nav route matrix — smoke-navigate every live organiser route and assert it stays authed and

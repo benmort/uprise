@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect } from "@playwright/test";
 
 /**
  * Marketing site smoke (meld doc 12 / prog marketing.smoke). Public — no session.

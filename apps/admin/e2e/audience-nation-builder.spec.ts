@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect, type Page } from "@playwright/test";
 
 /**
  * The NationBuilder first-run journey on Data sync — connect a nation from the empty

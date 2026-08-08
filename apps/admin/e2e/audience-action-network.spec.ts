@@ -1,4 +1,5 @@
-import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 /**
  * Importing an audience from Action Network — the path an organiser walks before every blast,

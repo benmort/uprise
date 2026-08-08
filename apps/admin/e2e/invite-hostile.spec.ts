@@ -1,4 +1,5 @@
-import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 /**
  * Invitation acceptance under hostile client conditions – one test per hypothesis left standing

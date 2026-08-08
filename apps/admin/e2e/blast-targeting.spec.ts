@@ -1,4 +1,5 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect, type APIRequestContext } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -27,7 +28,7 @@ const ORGANISER = { email: "demo.organiser@uprise.test", password: "demo-organis
 
 const ids: Record<string, string | undefined> = (() => {
   try {
-    return JSON.parse(readFileSync(resolve(__dirname, ".auth/context.json"), "utf8")).ids ?? {};
+    return JSON.parse(readFileSync(resolve(__dirname, ".auth", `context-${process.env.TEST_PARALLEL_INDEX ?? 0}.json`), "utf8")).ids ?? {};
   } catch {
     return {};
   }

@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect } from "@playwright/test";
 
 /**
  * Standalone auth app smoke (meld doc 12 / prog auth.smoke). Public — no session.

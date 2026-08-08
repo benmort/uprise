@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect } from "@playwright/test";
 
 /**
  * The two status pages, which are two different security postures on the same health snapshot.

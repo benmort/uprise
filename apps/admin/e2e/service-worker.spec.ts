@@ -1,4 +1,5 @@
-import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 /**
  * The next-pwa service worker – the one production surface with no e2e cover at all.

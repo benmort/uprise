@@ -1,4 +1,5 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect, type APIRequestContext } from "@playwright/test";
 
 /**
  * The volunteers roster must not be able to demote the workspace OWNER.

@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect, type Page } from "@playwright/test";
 
 /**
  * Proven past defects in the blast composer, pinned at the browser level.

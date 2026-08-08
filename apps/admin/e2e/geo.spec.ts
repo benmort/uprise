@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect, type Page } from "@playwright/test";
 
 /**
  * The geo (data) explorer. Each kind renders its list/map surface. NOTE: the boundary/address/ABS

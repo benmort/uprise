@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect } from "@playwright/test";
 
 /**
  * The standalone auth/SSO app (:3002). All specs run UNAUTHENTICATED (these are the pre-login

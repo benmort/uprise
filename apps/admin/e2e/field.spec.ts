@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -17,10 +18,12 @@ import { resolve } from "node:path";
  */
 const IS_NGROK = process.env.E2E_TARGET === "ngrok";
 const FIELD_URL = process.env.FIELD_URL || (IS_NGROK ? "https://field.dev.uprise.org.au" : "http://localhost:3005");
-const VOLUNTEER_STATE = resolve(__dirname, ".auth/volunteer.json");
+// Per worker, like the organiser state — global-setup writes one volunteer session per tenant,
+// and a worker using another worker's volunteer would be acting in the wrong tenant entirely.
+const VOLUNTEER_STATE = resolve(__dirname, ".auth", `volunteer-${process.env.TEST_PARALLEL_INDEX ?? 0}.json`);
 const ids: Record<string, string | undefined> = (() => {
   try {
-    return JSON.parse(readFileSync(resolve(__dirname, ".auth/context.json"), "utf8")).ids ?? {};
+    return JSON.parse(readFileSync(resolve(__dirname, ".auth", `context-${process.env.TEST_PARALLEL_INDEX ?? 0}.json`), "utf8")).ids ?? {};
   } catch {
     return {};
   }

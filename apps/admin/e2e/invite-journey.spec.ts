@@ -1,4 +1,5 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect, type APIRequestContext } from "@playwright/test";
 
 /**
  * Invitation acceptance, end to end, in every engine.

@@ -42,22 +42,29 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   fullyParallel: false,
   /**
-   * workers: 1 — and this is measured, not assumed. Don't raise it without doing the seeding work
-   * described below; the experiment has been run.
+   * workers: 1 — still, and this is measured at every step rather than assumed.
    *
-   *   workers=1  → 109 passed,  2 failed,  5 flaky   (16.6m)
-   *   workers=4  → 104 passed,  7 failed, 13 flaky   (10.8m)
+   *   workers=1, one shared tenant   → 109 passed,  2 failed,  5 flaky   (16.6m)
+   *   workers=4, one shared tenant   → 104 passed,  7 failed, 13 flaky   (10.8m)
+   *   workers=4, a tenant per worker → 111 passed,  6 failed,  6 flaky   (11.2m)
    *
-   * 35% off the wall clock for triple the hard failures and nearly triple the flakes. Every test
-   * that newly failed creates or mutates shared state — audience syncs, blast create/schedule,
-   * invite acceptance, campaign creation — against the ONE demo tenant global-setup seeds. Even
-   * with fullyParallel:false (tests within a file stay ordered), separate files racing on the same
-   * tenant collide: one spec's blast list is another's fixture.
+   * The tenant-per-worker machinery below is built and works: global-setup provisions and seeds
+   * `e2e-worker-<n>` for each worker and writes a session and ids per worker, and e2e/fixtures.ts
+   * hands each worker its own. It recovered most of the damage — flakes halved, seven passing
+   * tests came back — but four workers still lose to serial on hard failures, so raising this
+   * would ship a less trustworthy suite for 5 minutes of wall clock.
    *
-   * The unlock is tenant-per-worker, not a bigger number here: seed N tenants, mint a storageState
-   * per worker, and hand each worker its own via a fixture keyed on testInfo.parallelIndex. Then
-   * raise this, and verify by running the suite TWICE and diffing the failures — a single green
-   * run does not distinguish "safe" from "got lucky on ordering".
+   * What is left is precisely identified, and it is a side effect of the fix rather than a
+   * mystery: creating a tenant per worker makes the demo users members of ALL of them, so the
+   * seven specs that sign in directly over HTTP (rather than using the injected storageState)
+   * now get a session whose tenant is ambiguous. Five of the six remaining failures are in those
+   * files — the invite specs especially, which then create and count seats in whichever tenant
+   * they landed in.
+   *
+   * The remaining step: after signing in, pin the session with POST /iam/select-tenant to the
+   * worker's tenant. `.auth/context-<i>.json` now carries `tenantId` for exactly that. Then raise
+   * this, and verify by running the suite TWICE and diffing — one green run does not distinguish
+   * "safe" from "got lucky on ordering".
    */
   workers: 1,
   // One retry everywhere, not just CI. The admin app's next-pwa service worker can replay a

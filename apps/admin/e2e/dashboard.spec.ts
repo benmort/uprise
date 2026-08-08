@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect, type Page } from "@playwright/test";
 
 // Inlined (no shared local .ts import — Playwright's Node-23 loader trips on those; see the config
 // header + auth.spec, which do the same).

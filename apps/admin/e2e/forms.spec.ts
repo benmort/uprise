@@ -1,8 +1,9 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test } from "./fixtures";
+import { expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const ctx = JSON.parse(readFileSync(resolve(__dirname, ".auth/context.json"), "utf8"));
+const ctx = JSON.parse(readFileSync(resolve(__dirname, ".auth", `context-${process.env.TEST_PARALLEL_INDEX ?? 0}.json`), "utf8"));
 const ids = ctx.ids ?? {};
 async function authed(page: Page) {
   await page.addInitScript(
