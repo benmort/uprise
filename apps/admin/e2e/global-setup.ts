@@ -91,15 +91,22 @@ function stateFor(token: string, origins: Array<{ origin: string; localStorage: 
   };
 }
 
-/** Create the worker's tenant if it isn't there yet, and return its id. */
-async function ensureWorkerTenant(ownerToken: string, slug: string): Promise<string | null> {
+/** The seeded demo tenant every serial run has always used. */
+const PRIMARY_TENANT_SLUG = "uprise-labs";
+
+async function findTenantIdBySlug(ownerToken: string, slug: string): Promise<string | null> {
   const existing = await fetch(`${API}/tenants?slug=${encodeURIComponent(slug)}`, {
     headers: { Authorization: `Bearer ${ownerToken}` },
   })
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null);
-  const found = asArray(existing?.data ?? existing).find((t: any) => t?.slug === slug);
-  if (found?.id) return found.id;
+  return (asArray(existing?.data ?? existing).find((t: any) => t?.slug === slug)?.id ?? null) as string | null;
+}
+
+/** Create the worker's tenant if it isn't there yet, and return its id. */
+async function ensureWorkerTenant(ownerToken: string, slug: string): Promise<string | null> {
+  const found = await findTenantIdBySlug(ownerToken, slug);
+  if (found) return found;
 
   const res = await fetch(`${API}/tenants`, {
     method: "POST",
@@ -149,7 +156,12 @@ export default async function globalSetup(config?: { workers?: number }) {
    *
    * Worker 0 keeps the primary demo tenant, so a serial run is byte-identical to what it was.
    */
-  const ownerToken = workers > 1 ? await login(OWNER) : "";
+  // Always sign in as the owner: even a serial run needs the PRIMARY tenant id resolved
+  // explicitly. Provisioning worker tenants makes the demo users members of several, so nothing
+  // downstream may fall back to "whichever membership came first" — that is not stable, and it
+  // stays unstable for every later run because the extra memberships persist in the database.
+  const ownerToken = await login(OWNER);
+  const primaryTenantId = ownerToken ? await findTenantIdBySlug(ownerToken, PRIMARY_TENANT_SLUG) : null;
   const dir = resolve(__dirname, ".auth");
   mkdirSync(dir, { recursive: true });
 
@@ -182,9 +194,13 @@ export default async function globalSetup(config?: { workers?: number }) {
     // workers would have each worker silently move the others' tenant out from under them.
     const orgToken = await login(ORGANISER);
     const volToken = await login(VOLUNTEER);
-    if (tenantId) {
-      await selectTenant(orgToken, tenantId);
-      await selectTenant(volToken, tenantId);
+    // Pin ALWAYS — worker 0 to the primary tenant, the rest to their own. Leaving worker 0
+    // unpinned meant its session landed on whichever membership the API resolved first, and once
+    // the worker tenants exist that is no longer the primary one.
+    const pinTo = tenantId ?? primaryTenantId;
+    if (pinTo) {
+      await selectTenant(orgToken, pinTo);
+      await selectTenant(volToken, pinTo);
     }
 
     const get = async (path: string) => {
@@ -234,7 +250,7 @@ export default async function globalSetup(config?: { workers?: number }) {
     for (const name of volNames) writeFileSync(resolve(dir, name), JSON.stringify(stateFor(volToken, volOrigins), null, 2));
 
     const ctxNames = index === 0 ? [`context-${index}.json`, "context.json"] : [`context-${index}.json`];
-    for (const name of ctxNames) writeFileSync(resolve(dir, name), JSON.stringify({ user, pass, ids, tenantSlug: slug, tenantId }, null, 2));
+    for (const name of ctxNames) writeFileSync(resolve(dir, name), JSON.stringify({ user, pass, ids, tenantSlug: slug, tenantId, primaryTenantId }, null, 2));
 
     console.log(
       `[e2e] worker ${index}${slug ? ` (${slug})` : " (primary)"} ids:`,

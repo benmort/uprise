@@ -35,13 +35,26 @@ async function main(): Promise<void> {
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ["error", "warn"] });
   try {
     const prisma = app.get(PrismaService);
-    const tenant = await prisma.tenant.findUnique({ where: { slug: PRIMARY_TENANT.slug } });
-    if (!tenant) {
+    /**
+     * Every tenant the browser suite writes into: the primary demo tenant, plus the
+     * `e2e-worker-<n>` tenants global-setup provisions for a parallel run.
+     *
+     * Cleaning only the primary one stopped being enough the moment those existed. The worker
+     * tenants kept every campaign, shift and invitation from every parallel run, and the piled-up
+     * seats eventually made invite acceptance answer 403 — which reads as a broken invite flow
+     * rather than as a dirty database, and only ever in parallel runs.
+     */
+    const tenants = await prisma.tenant.findMany({
+      where: { OR: [{ slug: PRIMARY_TENANT.slug }, { slug: { startsWith: "e2e-worker-" } }] },
+      select: { id: true, slug: true },
+    });
+    if (tenants.length === 0) {
       // eslint-disable-next-line no-console
       console.log("Primary tenant not found — nothing to clean.");
       return;
     }
-    const tenantId = tenant.id;
+
+    for (const { id: tenantId, slug } of tenants) {
 
     const campaigns = await prisma.canvassCampaign.findMany({
       where: { tenantId, OR: CAMPAIGN_PATTERNS.map((p) => ({ name: { startsWith: p } })) },
@@ -91,6 +104,7 @@ async function main(): Promise<void> {
     // eslint-disable-next-line no-console
     console.log(
       [
+        `[${slug}]`,
         `campaigns: ${removedCampaigns.count}`,
         `shifts: ${removedShifts.count}`,
         `dispositions: ${removedDisp.count}`,
@@ -101,6 +115,7 @@ async function main(): Promise<void> {
         `e2e invitations: ${removedInvites.count}`,
       ].join("  "),
     );
+    }
   } finally {
     await app.close();
   }

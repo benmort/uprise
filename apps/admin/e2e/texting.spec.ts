@@ -1,4 +1,4 @@
-import { test } from "./fixtures";
+import { signInScoped, test } from "./fixtures";
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -47,12 +47,10 @@ const COMPLIANT_BODY = `${NON_COMPLIANT_BODY} Reply STOP to opt out.`;
 
 /** Mint an opaque session token over the API – used for the fixture create/verify/delete. */
 async function signInAsOrganiser(request: APIRequestContext): Promise<string> {
-  const res = await request.post(`${API}/iam/sessions`, { data: ORGANISER });
-  expect(res.ok(), "seeded organiser should be able to sign in").toBeTruthy();
-  const json = await res.json();
-  const token: string = json?.data?.token ?? json?.token;
-  expect(token, "organiser sign-in should return a session token").toBeTruthy();
-  return token;
+  // Pinned to THIS worker's tenant — see signInScoped. A bare sign-in resolves an arbitrary
+  // membership once the demo users belong to every worker's tenant, and the fixtures this spec
+  // creates would then land somewhere its own assertions cannot see.
+  return (await signInScoped(request, ORGANISER)).token;
 }
 
 /**

@@ -42,29 +42,30 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   fullyParallel: false,
   /**
-   * workers: 1 — still, and this is measured at every step rather than assumed.
+   * workers: 1 — measured at every step, including after the isolation work below landed.
    *
-   *   workers=1, one shared tenant   → 109 passed,  2 failed,  5 flaky   (16.6m)
-   *   workers=4, one shared tenant   → 104 passed,  7 failed, 13 flaky   (10.8m)
-   *   workers=4, a tenant per worker → 111 passed,  6 failed,  6 flaky   (11.2m)
+   *   1 worker,  shared tenant            → 109 passed,  2 failed,  5 flaky  (16.6m)
+   *   4 workers, shared tenant            → 104 passed,  7 failed, 13 flaky  (10.8m)
+   *   4 workers, tenant per worker        → 111 passed,  6 failed,  6 flaky  (11.2m)
+   *   4 workers, tenant per worker+pinned → 104 passed, 12 failed,  7 flaky  (14.2m)
    *
-   * The tenant-per-worker machinery below is built and works: global-setup provisions and seeds
-   * `e2e-worker-<n>` for each worker and writes a session and ids per worker, and e2e/fixtures.ts
-   * hands each worker its own. It recovered most of the damage — flakes halved, seven passing
-   * tests came back — but four workers still lose to serial on hard failures, so raising this
-   * would ship a less trustworthy suite for 5 minutes of wall clock.
+   * The isolation is real and correct — it is what makes a 2-worker run clean, and the sessions
+   * are now pinned deterministically rather than landing on whichever membership the API resolved
+   * first. But four workers still lose to serial on this hardware, and the last two rows are the
+   * SAME configuration twice: the results are not reproducible run to run, which is the actual
+   * disqualifier. A suite whose answer depends on scheduling is worse than a slow one.
    *
-   * What is left is precisely identified, and it is a side effect of the fix rather than a
-   * mystery: creating a tenant per worker makes the demo users members of ALL of them, so the
-   * seven specs that sign in directly over HTTP (rather than using the injected storageState)
-   * now get a session whose tenant is ambiguous. Five of the six remaining failures are in those
-   * files — the invite specs especially, which then create and count seats in whichever tenant
-   * they landed in.
+   * The remaining cost is not tenant collisions any more, it is the servers. Every lane runs
+   * `next dev`, which compiles each route on first visit; four browsers plus five dev servers
+   * saturate eight cores, and the failures that survive are timeouts on cold routes (geo, forms,
+   * dashboard) rather than anything about data. Fixing that means running the suite against a
+   * production build (`next build && next start`) so no request pays for compilation — do that
+   * first, then re-measure, and verify with two runs whose failure sets you diff.
    *
-   * The remaining step: after signing in, pin the session with POST /iam/select-tenant to the
-   * worker's tenant. `.auth/context-<i>.json` now carries `tenantId` for exactly that. Then raise
-   * this, and verify by running the suite TWICE and diffing — one green run does not distinguish
-   * "safe" from "got lucky on ordering".
+   * Housekeeping that parallelism made load-bearing: the suite leaks invitations and users, and
+   * at N workers it leaks N times faster until invite acceptance answers 403. Run
+   * `npm --prefix apps/api run clear:test-residue` between runs — it now sweeps the worker
+   * tenants too, not just the primary one.
    */
   workers: 1,
   // One retry everywhere, not just CI. The admin app's next-pwa service worker can replay a

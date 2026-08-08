@@ -1,4 +1,4 @@
-import { test } from "./fixtures";
+import { signInScoped, test } from "./fixtures";
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 /**
@@ -42,12 +42,10 @@ const REMOTE_LISTS = [
 ];
 
 async function signInAsOrganiser(request: APIRequestContext): Promise<string> {
-  const res = await request.post(`${API}/iam/sessions`, { data: ORGANISER });
-  expect(res.ok(), "seeded organiser should be able to sign in").toBeTruthy();
-  const json = await res.json();
-  const token: string = json?.data?.token ?? json?.token;
-  expect(token, "organiser sign-in should return a session token").toBeTruthy();
-  return token;
+  // Pinned to THIS worker's tenant — see signInScoped. A bare sign-in resolves an arbitrary
+  // membership once the demo users belong to every worker's tenant, and the fixtures this spec
+  // creates would then land somewhere its own assertions cannot see.
+  return (await signInScoped(request, ORGANISER)).token;
 }
 
 /** The API envelope the admin's `request()` unwraps. */

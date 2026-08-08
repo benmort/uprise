@@ -1,4 +1,4 @@
-import { test } from "./fixtures";
+import { signInScoped, test } from "./fixtures";
 import { expect, type APIRequestContext } from "@playwright/test";
 
 /**
@@ -22,12 +22,10 @@ const API =
 const ORGANISER = { email: "demo.organiser@uprise.test", password: "demo-organiser-pw" };
 
 async function signIn(request: APIRequestContext): Promise<string> {
-  const res = await request.post(`${API}/iam/sessions`, { data: ORGANISER });
-  expect(res.ok(), "seeded organiser should be able to sign in").toBeTruthy();
-  const json = await res.json();
-  const token: string = json?.data?.token ?? json?.token;
-  expect(token, "sign-in should return a session token").toBeTruthy();
-  return token;
+  // Pinned to THIS worker's tenant — see signInScoped. A bare sign-in resolves an arbitrary
+  // membership once the demo users belong to every worker's tenant, and the fixtures this spec
+  // creates would then land somewhere its own assertions cannot see.
+  return (await signInScoped(request, ORGANISER)).token;
 }
 
 test.describe("roster — the workspace owner is not editable here", () => {

@@ -1,4 +1,4 @@
-import { test } from "./fixtures";
+import { signInScoped, test } from "./fixtures";
 import { expect, type APIRequestContext } from "@playwright/test";
 
 /**
@@ -35,13 +35,12 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 /** Mint an opaque session token + resolve the tenant, over the API (no UI login needed). */
 async function signInAsOwner(request: APIRequestContext) {
-  const res = await request.post(`${API}/iam/sessions`, { data: OWNER });
-  expect(res.ok(), "seeded owner should be able to sign in").toBeTruthy();
-  const json = await res.json();
-  const token: string = json?.data?.token ?? json?.token;
-  const memberships = json?.data?.memberships ?? json?.memberships ?? [];
-  expect(token, "owner sign-in should return a session token").toBeTruthy();
-  return { token, tenantId: memberships[0]?.tenantId as string };
+  // The tenant comes from signInScoped, NOT from memberships[0]. Once a tenant exists per worker
+  // the demo owner is a member of all of them, so memberships[0] picked whichever the API
+  // resolved first — and the invites this spec creates, plus the seats it counts afterwards,
+  // landed in some other worker's tenant.
+  const { token, tenantId } = await signInScoped(request, OWNER);
+  return { token, tenantId: tenantId as string };
 }
 
 /**
