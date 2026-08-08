@@ -22,6 +22,7 @@ import {
   type WhatsappTemplate,
 } from "@/lib/api";
 import { tourComposerIntent } from "@/lib/tours/uprise-tour";
+import { buildBlastPayload } from "@/lib/blasts/blast-payload";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -463,8 +464,23 @@ export default function BlastComposerPage() {
       setLastSavedAt(new Date());
     }, 1200);
     return () => window.clearTimeout(timeout);
+    // Every field `blastPayload` sends must appear here, or editing it shows "Saved at HH:MM"
+    // while nothing is persisted. `p2p` and `linkedCampaignId` were missing: the P2P flag is what
+    // makes dispatchDueScheduled skip auto-batching (blasts.service.ts isP2pBlast), so a blast
+    // ticked for a text bank sent itself automatically instead.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blastId, campaignName, audienceId, template, channel, contentSid, contentVariableMap, fromNumberId]);
+  }, [
+    blastId,
+    campaignName,
+    audienceId,
+    template,
+    channel,
+    contentSid,
+    contentVariableMap,
+    fromNumberId,
+    linkedCampaignId,
+    p2p,
+  ]);
 
   useEffect(() => {
     let alive = true;
@@ -482,18 +498,20 @@ export default function BlastComposerPage() {
     };
   }, []);
 
-  const blastPayload = () => ({
-    title: campaignName,
-    audienceId: audienceId || undefined,
-    bodyTemplate: template,
-    channel,
-    fromNumberId: fromNumberId || undefined,
-    campaignId: linkedCampaignId || undefined,
-    p2p,
-    ...(channel === "WHATSAPP"
-      ? { contentSid: contentSid || undefined, contentVariableMap }
-      : {}),
-  });
+  // Payload shape + the null-clears-vs-undefined-leaves rule live in src/lib so they are
+  // testable — see blast-payload.ts for the two bugs that produced them.
+  const blastPayload = () =>
+    buildBlastPayload({
+      campaignName,
+      audienceId,
+      template,
+      channel,
+      fromNumberId,
+      linkedCampaignId,
+      p2p,
+      contentSid,
+      contentVariableMap,
+    });
 
   const ensureBlast = async () => {
     if (blastId) return blastId;
