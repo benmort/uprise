@@ -125,11 +125,19 @@ export class CanvassingController {
 
   @Patch("volunteers/:id")
   @Roles(AppUserRole.ORGANISER)
-  async updateVolunteer(@Param("id") id: string, @Body() dto: UpdateVolunteerDto, @TenantId() tenantId: string) {
-    return this.canvassing.updateVolunteer(tenantId, id, {
-      ...dto,
-      role: dto.role as AppUserRole | undefined,
-    });
+  async updateVolunteer(
+    @Param("id") id: string,
+    @Body() dto: UpdateVolunteerDto,
+    @TenantId() tenantId: string,
+    // The actor decides whether an OWNER row may be touched at all — see updateVolunteer.
+    @Req() req: Request & { user?: AuthUser },
+  ) {
+    return this.canvassing.updateVolunteer(
+      tenantId,
+      id,
+      { ...dto, role: dto.role as AppUserRole | undefined },
+      { userId: req.user?.id, isSuperAdmin: req.user?.isSuperAdmin },
+    );
   }
 
   @Get("turfs/:turfId/contacts")

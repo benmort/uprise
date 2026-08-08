@@ -490,9 +490,10 @@ export async function createBlast(input: {
   channel?: MessageChannel;
   contentSid?: string;
   contentVariableMap?: Record<string, string>;
-  fromNumberId?: string;
+  /** `null` is accepted (same payload builder as update) and means "no pinned number". */
+  fromNumberId?: string | null;
   /** Canvass campaign this blast belongs to — an SMS campaign with blasts is a text bank. */
-  campaignId?: string;
+  campaignId?: string | null;
   /** P2P: volunteers press-send each initial message; the cron never auto-batches it. */
   p2p?: boolean;
 }) {
@@ -512,8 +513,10 @@ export async function updateBlast(
     channel?: MessageChannel;
     contentSid?: string;
     contentVariableMap?: Record<string, string>;
-    fromNumberId?: string;
-    campaignId?: string;
+    /** `null` clears the pinned number (back to auto); omit to leave it alone. */
+    fromNumberId?: string | null;
+    /** `null` unlinks the campaign / text bank; omit to leave it alone. */
+    campaignId?: string | null;
     p2p?: boolean;
   },
 ) {

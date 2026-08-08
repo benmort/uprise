@@ -328,10 +328,24 @@ export async function subscribePush(sub: {
   });
 }
 
-export type PhotoUploadResult = { ok: true; data: { url: string } } | { ok: false; error: string };
+export type PhotoUploadResult =
+  | { ok: true; data: { url: string } }
+  | {
+      ok: false;
+      error: string;
+      /** HTTP status when the API answered. */
+      status?: number;
+      /** The request never left the device (offline, DNS/TLS, blocked). */
+      networkError?: boolean;
+    };
 
 /** Core multipart upload — accepts a Blob (+ filename) so it works for both a live `File` at
- *  the door AND a Blob replayed from the offline outbox (the Blob carries its own MIME type). */
+ *  the door AND a Blob replayed from the offline outbox (the Blob carries its own MIME type).
+ *
+ *  Failures carry `status`/`networkError` because the outbox decides retriable-vs-terminal from
+ *  them (see outbox-dispatch's `classify`). Returning only a message forced that decision to be
+ *  re-derived by pattern-matching prose, and "Upload failed (401)" and WebKit's "Load failed"
+ *  both read as terminal — a canvasser's queued photo discarded instead of retried. */
 export async function uploadDoorPhotoBlob(blob: Blob, filename: string): Promise<PhotoUploadResult> {
   const apiUrl = getApiUrl();
   const form = new FormData();
@@ -344,11 +358,20 @@ export async function uploadDoorPhotoBlob(blob: Blob, filename: string): Promise
     });
     const json = await res.json().catch(() => null);
     if (!res.ok) {
-      return { ok: false as const, error: json?.error?.message || json?.message || `Upload failed (${res.status})` };
+      return {
+        ok: false as const,
+        error: json?.error?.message || json?.message || `Upload failed (${res.status})`,
+        status: res.status,
+      };
     }
     return { ok: true as const, data: (json?.data ?? json) as { url: string } };
   } catch (err) {
-    return { ok: false as const, error: err instanceof Error ? err.message : "Upload failed" };
+    // fetch only rejects when no response arrived at all.
+    return {
+      ok: false as const,
+      error: err instanceof Error ? err.message : "Upload failed",
+      networkError: true,
+    };
   }
 }
 
