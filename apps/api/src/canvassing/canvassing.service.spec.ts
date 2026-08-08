@@ -51,6 +51,7 @@ describe("CanvassingService", () => {
       },
       doorKnock: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         create: jest.fn(async ({ data }: any) => ({ id: "dk1", ...data })),
         findMany: jest.fn(),
         count: jest.fn(),
@@ -659,6 +660,60 @@ describe("CanvassingService", () => {
         expect.objectContaining({ take: 2, cursor: { id: "k0" }, skip: 1 }),
       );
       expect(res.nextCursor).toBe("k2");
+    });
+
+    it("flags a fast knock across a page seam by seeding from the cursor row", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      const base = new Date("2026-06-17T10:00:00Z").getTime();
+      // The cursor row: last knock of page 1, same volunteer, 5s before page 2's first row.
+      prisma.doorKnock.findFirst.mockResolvedValue({ volunteerId: "u1", createdAt: new Date(base) });
+      prisma.doorKnock.findMany.mockResolvedValue([
+        { id: "k2", volunteerId: "u1", lat: 1, lng: 1, createdAt: new Date(base + 5000), volunteer: null },
+      ]);
+
+      const { flags } = await service.qaReview("org1", "c1", { cursor: "k1", take: 1 });
+
+      // Without the seed this row would have no predecessor and raise nothing.
+      expect(flags.map((f) => f.id)).toEqual(["k2:FAST_CADENCE"]);
+      expect(flags[0].reason).toBe("Knocked 5s after previous");
+      // The anchor read is tenant-scoped – a cursor from another tenant cannot seed it.
+      expect(prisma.doorKnock.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: "k1", tenantId: "org1" } }),
+      );
+    });
+
+    it("does not seed across a volunteer change at a page seam", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      const base = new Date("2026-06-17T10:00:00Z").getTime();
+      // Cursor row belongs to a different volunteer, so the cadence run must reset.
+      prisma.doorKnock.findFirst.mockResolvedValue({ volunteerId: "u9", createdAt: new Date(base) });
+      prisma.doorKnock.findMany.mockResolvedValue([
+        { id: "k2", volunteerId: "u1", lat: 1, lng: 1, createdAt: new Date(base + 5000), volunteer: null },
+      ]);
+
+      const { flags } = await service.qaReview("org1", "c1", { cursor: "k1", take: 1 });
+
+      expect(flags).toEqual([]);
+    });
+
+    it("survives a stale or foreign cursor with no anchor row", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      prisma.doorKnock.findFirst.mockResolvedValue(null);
+      prisma.doorKnock.findMany.mockResolvedValue([
+        { id: "k2", volunteerId: "u1", lat: 1, lng: 1, createdAt: new Date(), volunteer: null },
+      ]);
+
+      const { flags } = await service.qaReview("org1", "c1", { cursor: "gone", take: 1 });
+
+      // No predecessor to compare against, but the page still reads and NO_GPS still applies.
+      expect(flags).toEqual([]);
+    });
+
+    it("does not issue an anchor read on the first page", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      prisma.doorKnock.findMany.mockResolvedValue([]);
+      await service.qaReview("org1", "c1");
+      expect(prisma.doorKnock.findFirst).not.toHaveBeenCalled();
     });
 
     it("reports no next cursor on a short page, and sends no cursor when none is given", async () => {

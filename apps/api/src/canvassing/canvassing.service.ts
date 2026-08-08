@@ -2335,7 +2335,18 @@ export class CanvassingService {
       resolved: boolean;
       state: string | null;
     }> = [];
+    // Cadence is a comparison against the preceding knock, so a paged read would lose the
+    // flag on every page's first row. The cursor row IS that predecessor (the read skips it),
+    // so seeding `prev` from it makes the seam invisible – page 2 flags exactly what an
+    // unpaged scan would. Tenant-scoped because the cursor is caller-supplied.
     let prev: { volunteerId: string | null; at: Date } | null = null;
+    if (opts?.cursor) {
+      const anchor = await this.prisma.doorKnock.findFirst({
+        where: { id: opts.cursor, tenantId },
+        select: { volunteerId: true, createdAt: true },
+      });
+      if (anchor) prev = { volunteerId: anchor.volunteerId, at: anchor.createdAt };
+    }
     for (const k of knocks) {
       if (k.lat == null || k.lng == null) {
         flags.push({
