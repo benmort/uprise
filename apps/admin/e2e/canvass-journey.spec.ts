@@ -30,7 +30,15 @@ test.describe("canvass — campaign lifecycle", () => {
     await gotoOk(page, "/canvass/new", /campaign|name|create|doors|conversations/i);
   });
 
+  /**
+   * test.slow(): this walks EIGHT routes in one test, and the suite runs against `next dev`, which
+   * compiles each route on its first visit. Eight first-compiles do not fit in the default 60s
+   * budget — the test failed at 54.4s having rendered most of them correctly, then passed on
+   * retry once the routes were warm. That is a timing artefact of dev-mode compilation, not a
+   * product failure, and the retry was papering over it: on a cold CI runner the retry is cold too.
+   */
   test("campaign-scoped ops pages render for the seeded campaign", async ({ page }) => {
+    test.slow();
     test.skip(!ids.campaignId, "no seeded campaign");
     const id = ids.campaignId!;
     for (const [sub, expected] of [
@@ -47,7 +55,9 @@ test.describe("canvass — campaign lifecycle", () => {
     }
   });
 
+  // Five first-compiles in one test — same dev-mode budget problem as the eight-route test above.
   test("the campaign-less aggregates render across all campaigns", async ({ page }) => {
+    test.slow();
     for (const [route, expected] of [
       ["/canvass/results", /result|disposition|support|funnel|door/i],
       ["/canvass/walklists", /walk list|turf|route/i],

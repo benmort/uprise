@@ -52,6 +52,19 @@ test.describe("auth app — organiser sign-in journey", () => {
     await page.locator('input[type="email"], input[name="email"]').first().fill(DEMO_ORGANISER.email);
     await page.locator('input[type="password"], input[name="password"]').first().fill(DEMO_ORGANISER.password);
     await page.getByRole("button", { name: /sign in|log in|continue/i }).first().click();
+
+    // A user who belongs to more than one workspace is asked which one FIRST — the seeded
+    // organiser now does, so sign-in lands on /select-tenant and this test used to sit on
+    // waitForURL(/dashboard/) until it timed out. Choosing a workspace IS the journey; skipping
+    // straight past it only ever worked while the seed had exactly one membership.
+    await page.waitForURL(/\/select-tenant|\/dashboard/, { timeout: 30_000 });
+    if (/\/select-tenant/.test(page.url())) {
+      await expect(page.getByRole("heading", { name: /choose a workspace/i })).toBeVisible({
+        timeout: 15_000,
+      });
+      await page.getByRole("button").filter({ hasNotText: /sign out|back|search/i }).first().click();
+    }
+
     // The API sets the cross-subdomain cookie and redirects into the admin app.
     await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
     await expect(page.locator("body")).toBeVisible();

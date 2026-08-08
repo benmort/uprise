@@ -34,13 +34,13 @@ test.describe("roster — the workspace owner is not editable here", () => {
     const token = await signIn(request);
     const auth = { Authorization: `Bearer ${token}` };
 
-    const list = await request.get(`${API}/canvassing/volunteers`, { headers: auth });
+    const list = await request.get(`${API}/canvass/volunteers`, { headers: auth });
     expect(list.ok(), "the roster should be readable").toBeTruthy();
     const rows = (await list.json())?.data ?? [];
     const owner = (rows as Array<{ id: string; role?: string }>).find((r) => r.role === "OWNER");
     test.skip(!owner, "no OWNER on the seeded roster");
 
-    const res = await request.patch(`${API}/canvassing/volunteers/${owner!.id}`, {
+    const res = await request.patch(`${API}/canvass/volunteers/${owner!.id}`, {
       headers: auth,
       data: { role: "VOLUNTEER" },
     });
@@ -54,7 +54,7 @@ test.describe("roster — the workspace owner is not editable here", () => {
     expect(JSON.stringify(body)).toContain("OWNER_NOT_EDITABLE_HERE");
 
     // And the refusal is real: the owner still holds the role.
-    const after = await request.get(`${API}/canvassing/volunteers`, { headers: auth });
+    const after = await request.get(`${API}/canvass/volunteers`, { headers: auth });
     const stillOwner = ((await after.json())?.data ?? []).find(
       (r: { id: string }) => r.id === owner!.id,
     );
@@ -62,28 +62,60 @@ test.describe("roster — the workspace owner is not editable here", () => {
   });
 
   /**
-   * The guard protects the ROLE, not the row — an organiser must still be able to correct an
-   * owner's phone number. A guard that refused every write would have been the wrong fix.
+   * The WHOLE owner row is off-limits from the roster — not just the role field.
+   *
+   * That is deliberate, and the reason is the endpoint rather than the field: updateVolunteer
+   * writes TenantMember.role and User.passwordHash directly, bypassing TenantsService where the
+   * seniority and last-owner invariants live. The same edit dialog carries a password field, so
+   * letting an "innocuous" edit through would hand an organiser the owner's password and with it
+   * their account. Owners are managed on the members surface, which has the real guards.
    */
-  test("non-role edits to the OWNER row are still allowed", async ({ request }) => {
+  test("even a name-only edit to the OWNER row is refused, pointing at Settings", async ({ request }) => {
     const token = await signIn(request);
     const auth = { Authorization: `Bearer ${token}` };
 
-    const list = await request.get(`${API}/canvassing/volunteers`, { headers: auth });
+    const list = await request.get(`${API}/canvass/volunteers`, { headers: auth });
     const rows = (await list.json())?.data ?? [];
     const owner = (rows as Array<{ id: string; role?: string; name?: string }>).find(
       (r) => r.role === "OWNER",
     );
     test.skip(!owner, "no OWNER on the seeded roster");
 
-    const res = await request.patch(`${API}/canvassing/volunteers/${owner!.id}`, {
+    const res = await request.patch(`${API}/canvass/volunteers/${owner!.id}`, {
       headers: auth,
-      data: { name: owner!.name || "Owner" },
+      data: { displayName: "Renamed by an organiser" },
     });
 
     expect(
       res.ok(),
-      `a non-role edit to the owner returned ${res.status()} — it should be permitted`,
+      `a name edit to the owner returned ${res.status()} — the roster must refuse the whole row`,
+    ).toBeFalsy();
+    const body = await res.json().catch(() => ({}));
+    expect(JSON.stringify(body)).toContain("OWNER_NOT_EDITABLE_HERE");
+  });
+
+  // A non-owner row must stay fully editable — the guard is about owners, not about freezing the
+  // roster. Without this, refusing every PATCH would satisfy the tests above.
+  test("a VOLUNTEER row is still editable", async ({ request }) => {
+    const token = await signIn(request);
+    const auth = { Authorization: `Bearer ${token}` };
+
+    const list = await request.get(`${API}/canvass/volunteers`, { headers: auth });
+    const rows = (await list.json())?.data ?? [];
+    const volunteer = (rows as Array<{ id: string; role?: string; displayName?: string; name?: string }>).find(
+      (r) => r.role === "VOLUNTEER",
+    );
+    test.skip(!volunteer, "no VOLUNTEER on the seeded roster");
+
+    const keep = volunteer!.displayName ?? volunteer!.name ?? "Demo Volunteer";
+    const res = await request.patch(`${API}/canvass/volunteers/${volunteer!.id}`, {
+      headers: auth,
+      data: { displayName: keep },
+    });
+
+    expect(
+      res.ok(),
+      `editing an ordinary volunteer returned ${res.status()} — the guard is over-broad`,
     ).toBeTruthy();
   });
 });

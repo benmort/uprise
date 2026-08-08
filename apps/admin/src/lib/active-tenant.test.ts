@@ -24,6 +24,16 @@ describe("resolveTenantId", () => {
     expect(resolveTenantId({ tenantId: "t1" }, "")).toBe("t1");
   });
 
+  /**
+   * On today's contract the two fields cannot disagree: /auth/check derives activeTenant from
+   * req.user.tenantId and returns it only when the user holds no membership there, so a non-null
+   * activeTenant always carries the SAME id as tenantId. Pinned so a future change that decouples
+   * them shows up here rather than as a super-admin silently acting on the wrong tenant.
+   */
+  it("agrees with itself when both fields are present", () => {
+    expect(resolveTenantId({ tenantId: "t-acted", activeTenant: { id: "t-acted" } })).toBe("t-acted");
+  });
+
   it("is safe on an absent or half-loaded principal", () => {
     expect(resolveTenantId(null)).toBeUndefined();
     expect(resolveTenantId(undefined)).toBeUndefined();

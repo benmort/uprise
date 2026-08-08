@@ -12,8 +12,15 @@
  * sibling telephony card reads `tenantId` and works — the two were written against different
  * assumptions about the same object.
  *
- * Order matters: an explicit prop wins (a super-admin surface passes one), then the session's own
- * tenant, then the acting-as tenant as a last resort.
+ * Order: an explicit prop wins (a super-admin surface passes one), then `tenantId`, then
+ * `activeTenant` as a belt-and-braces fallback.
+ *
+ * That last one is defensive rather than load-bearing. GET /auth/check builds the field as
+ * `activeTenantId = req.user.tenantId` and returns the summary only when the user holds no
+ * membership in it — so whenever `activeTenant` is non-null its id EQUALS `tenantId`, and the two
+ * can never disagree. Which is exactly why the bug was one-directional: reading `activeTenant`
+ * alone loses ordinary users, while reading `tenantId` alone is always right. Other call sites in
+ * this app order the two the other way round; on today's contract both are correct.
  */
 
 export type TenantScopedPrincipal = {

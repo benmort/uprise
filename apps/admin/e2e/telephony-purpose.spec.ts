@@ -31,8 +31,17 @@ const localNumber = (purpose: string) => ({
 });
 
 async function stubTelephony(page: Page, purpose: string, onPatch?: (b: Record<string, unknown>) => void) {
+  // Turn the tenant-telephony flag ON for this page. The card self-hides when it is off, which on
+  // a demo tenant meant every assertion here skipped — a spec that always skips proves nothing.
+  // Stubbing the flag makes the test hermetic instead of dependent on seed configuration.
+  await page.route(/\/system\/feature-flags$/, async (route) => {
+    const res = await route.fetch().catch(() => null);
+    const body = res ? await res.json().catch(() => null) : null;
+    const flags = (body?.data ?? {}) as Record<string, unknown>;
+    return route.fulfill(json({ ...flags, FEATURE_TENANT_TELEPHONY_ENABLED: true }));
+  });
   await page.route(/\/telephony\/numbers(\?|$)/, (route) => route.fulfill(json([localNumber(purpose)])));
-  await page.route(/\/telephony\/runs(\?|$)/, (route) => route.fulfill(json([])));
+  await page.route(/\/telephony\/provisioning-runs(\?|$)/, (route) => route.fulfill(json([])));
   await page.route(/\/telephony\/numbers\/[^/]+$/, (route) => {
     if (route.request().method() !== "PATCH") return route.fallback();
     const body = JSON.parse(route.request().postData() || "{}");
@@ -48,9 +57,14 @@ test.describe("telephony — one purpose vocabulary", () => {
       await page.goto("/channels/calls", { waitUntil: "domcontentloaded" });
 
       const card = page.locator("#numbers");
-      // The card self-hides when the tenant's telephony flag is off — nothing to assert then.
-      const visible = await card.isVisible({ timeout: 20_000 }).catch(() => false);
-      test.skip(!visible, "tenant telephony flag off in this environment");
+      // waitFor, NOT isVisible: isVisible() resolves immediately and ignores a timeout option, so
+      // it answered "false" before the card had rendered and skipped the whole spec silently.
+      // The card also self-hides when the tenant's telephony flag is off — hence the guarded skip.
+      const visible = await card
+        .waitFor({ state: "visible", timeout: 20_000 })
+        .then(() => true)
+        .catch(() => false);
+      test.skip(!visible, "telephony card not rendered (flag off?)");
 
       await expect(card).toContainText("+61255501234");
       // THE assertion: it is already the calls number...
@@ -67,11 +81,17 @@ test.describe("telephony — one purpose vocabulary", () => {
     await page.goto("/channels/calls", { waitUntil: "domcontentloaded" });
 
     const card = page.locator("#numbers");
-    const visible = await card.isVisible({ timeout: 20_000 }).catch(() => false);
-    test.skip(!visible, "tenant telephony flag off in this environment");
+    const visible = await card
+      .waitFor({ state: "visible", timeout: 20_000 })
+      .then(() => true)
+      .catch(() => false);
+    test.skip(!visible, "telephony card not rendered (flag off?)");
 
     const button = card.getByRole("button", { name: "Use for calls" });
-    const offered = await button.isVisible().catch(() => false);
+    const offered = await button
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false);
     test.skip(!offered, "this session cannot provision (owner/organiser only)");
 
     await button.click();
