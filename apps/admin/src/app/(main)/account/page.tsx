@@ -28,6 +28,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { OriginBackLink, useDeepLinkPulse } from "@/components/setup/origin-deep-link";
 import { getSession, logout } from "@/lib/session";
+import { resolveAccountMobile } from "@/lib/account-mobile";
 import { PageHeader } from "@/components/shell/page-header";
 
 type Flags = {
@@ -59,12 +60,17 @@ export default function AccountPage() {
     }
     setFlags({
       email: session.email ?? null,
-      // Two different numbers live on a user: `phone` is free text typed into the profile,
-      // `mobile` is the number verified through OTP. Most people only ever have the second, so
-      // reading `phone` alone showed them "Verified" and "No mobile on file." at the same time —
-      // and after verifying, the card reset to an empty form as though nothing had happened.
-      // Same fallback the blast composer's proof field already uses.
-      mobile: prof.ok ? (prof.data.phone?.trim() || prof.data.mobile?.trim() || null) : null,
+      // Two numbers live on a user: `phone` is free text typed into the profile, `mobile` is the
+      // one proved by OTP. Which to show depends on what the chip beside it claims — see
+      // resolveAccountMobile. Preferring `phone` unconditionally (the fix for "Verified / No
+      // mobile on file.") put the UNVERIFIED number under the Verified chip.
+      mobile: prof.ok
+        ? resolveAccountMobile({
+            phone: prof.data.phone,
+            mobile: prof.data.mobile,
+            mobileVerified: Boolean(session.mobileVerified),
+          })
+        : null,
       role: session.role ?? "",
       emailVerified: Boolean(session.emailVerified),
       mobileVerified: Boolean(session.mobileVerified),

@@ -13,6 +13,7 @@ import { StateRegion } from "@/components/shell/state-region";
 import { SectionCard } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 import { listDivisions, type AreaLevel, type Division, type DivisionType, type TurfDivisionType } from "@/lib/api/geo";
+import { nameDivisionSources } from "@/lib/canvass/boundary-names";
 import {
   getCampaignBoundary,
   previewCampaignBoundary,
@@ -88,9 +89,9 @@ export default function CampaignBoundaryPage() {
         setPolygons(
           src.filter((s): s is Extract<BoundarySource, { kind: "polygon" }> => s.kind === "polygon").map((s) => s.geometry as GeoJSON.Polygon),
         );
-        setDivisions(
-          src.filter((s): s is Extract<BoundarySource, { kind: "division" }> => s.kind === "division").map((s) => ({ type: s.type, code: s.code, name: s.code })),
-        );
+        // Names come from `describedSources`, which the same response already carries — using
+        // the raw code as the label made a reloaded boundary unreadable. See nameDivisionSources.
+        setDivisions(nameDivisionSources(src, res.data.describedSources));
       } else if (res.status === 403) {
         setNoPermission(true);
       } else {

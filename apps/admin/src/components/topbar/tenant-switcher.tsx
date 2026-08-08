@@ -6,6 +6,7 @@ import { Check, ChevronsUpDown, Plus, Search, X } from "lucide-react";
 import { Dropdown, useDropdownClose } from "@uprise/ui";
 import { auth, orgProfile, tenants, tenantLogoUrl, type Membership, type TenantSearchRow } from "@uprise/api-client";
 import { cn } from "@/lib/utils";
+import { resolveCurrentWorkspace } from "@/lib/current-workspace";
 import { WorkspaceLoadingOverlay } from "@/components/shell/workspace-loading-overlay";
 import { TenantAvatar } from "./tenant-avatar";
 import { CreateTenantDialog } from "./create-tenant-dialog";
@@ -117,10 +118,13 @@ export function TenantSwitcher({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const current = memberships.find((m) => m.tenantId === currentTenantId) ?? memberships[0];
-  // Label/avatar fall back to the impersonated tenant (super-admin, no membership).
-  const currentName = current?.tenantName ?? activeTenant?.name ?? "Select workspace";
-  const seedId = current?.tenantId ?? activeTenant?.id ?? currentTenantId ?? "uprise";
+  // Acting-as outranks "my first workspace" — see resolveCurrentWorkspace for why the old
+  // `?? memberships[0]` made the impersonated-tenant fallback below unreachable.
+  const { name: currentName, seedId, membership: current } = resolveCurrentWorkspace({
+    memberships,
+    currentTenantId,
+    activeTenant,
+  });
 
   // ── Name unfurl ──────────────────────────────────────────────────────────
   // On hover / keyboard-focus, reveal the FULL tenant name in a floating pill that

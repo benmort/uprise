@@ -41,7 +41,25 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
-  workers: 1, // shared seeded DB — keep it serial to avoid cross-test contention
+  /**
+   * workers: 1 — and this is measured, not assumed. Don't raise it without doing the seeding work
+   * described below; the experiment has been run.
+   *
+   *   workers=1  → 109 passed,  2 failed,  5 flaky   (16.6m)
+   *   workers=4  → 104 passed,  7 failed, 13 flaky   (10.8m)
+   *
+   * 35% off the wall clock for triple the hard failures and nearly triple the flakes. Every test
+   * that newly failed creates or mutates shared state — audience syncs, blast create/schedule,
+   * invite acceptance, campaign creation — against the ONE demo tenant global-setup seeds. Even
+   * with fullyParallel:false (tests within a file stay ordered), separate files racing on the same
+   * tenant collide: one spec's blast list is another's fixture.
+   *
+   * The unlock is tenant-per-worker, not a bigger number here: seed N tenants, mint a storageState
+   * per worker, and hand each worker its own via a fixture keyed on testInfo.parallelIndex. Then
+   * raise this, and verify by running the suite TWICE and diffing the failures — a single green
+   * run does not distinguish "safe" from "got lucky on ordering".
+   */
+  workers: 1,
   // One retry everywhere, not just CI. The admin app's next-pwa service worker can replay a
   // cached sign-in redirect into a fresh context before sw-cleanup.tsx evicts it (the poisoned
   // start-url cache documented in auth.spec), which bounces an authed navigation to the auth
