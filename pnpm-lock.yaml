@@ -450,6 +450,9 @@ importers:
       '@uprise/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@uprise/domains':
+        specifier: workspace:*
+        version: link:../../packages/domains
       '@uprise/field':
         specifier: workspace:*
         version: link:../../packages/field
@@ -760,6 +763,9 @@ importers:
       '@uprise/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@uprise/domains':
+        specifier: workspace:*
+        version: link:../domains
     devDependencies:
       '@types/node':
         specifier: ^20.17.9
@@ -826,6 +832,9 @@ importers:
       '@uprise/api-client':
         specifier: workspace:*
         version: link:../api-client
+      '@uprise/domains':
+        specifier: workspace:*
+        version: link:../domains
       '@uprise/ui':
         specifier: workspace:*
         version: link:../ui
