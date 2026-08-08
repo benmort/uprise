@@ -165,6 +165,12 @@ export class TelephonySenderResolver {
   private async lookup(ctx: SenderContext): Promise<ResolvedSender | undefined> {
     const all = await this.prisma.telephonyPhoneNumber.findMany({
       where: { tenantId: ctx.tenantId, status: "ACTIVE" },
+      // Deterministic order. setNickname now keeps exactly one "voice" number per tenant, but
+      // rows written before that still carry two, and an unordered findMany let Postgres decide
+      // which one became the caller ID — so the number recipients saw could disagree with the
+      // one the admin card badges as the calls number, and could change between calls. Newest
+      // first matches what the card shows.
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     });
     // Split by capability FIRST, so a resolution can only ever return a number that can do
     // the job asked of it. A tenant holds both classes (a mobile to text from, a local to

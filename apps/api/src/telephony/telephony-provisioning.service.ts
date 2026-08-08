@@ -1598,12 +1598,37 @@ export class TelephonyProvisioningService {
       );
     }
     const trimmed = nickname?.trim();
-    return this.prisma.telephonyPhoneNumber.update({
-      where: { id: numberId },
-      data: {
-        ...(nickname !== undefined ? { nickname: trimmed ? trimmed : null } : {}),
-        ...(nextPurpose ? { purpose: nextPurpose } : {}),
-      },
+    const data = {
+      ...(nickname !== undefined ? { nickname: trimmed ? trimmed : null } : {}),
+      ...(nextPurpose ? { purpose: nextPurpose } : {}),
+    };
+    if (nextPurpose !== "voice") {
+      return this.prisma.telephonyPhoneNumber.update({ where: { id: numberId }, data });
+    }
+    /**
+     * Exactly ONE calls number per tenant.
+     *
+     * Provisioning stamps every local number "voice", so a tenant holding two locals (a second
+     * local run, or a BYO tenant that adopted numbers it already owned) had two — and nothing
+     * broke the tie. The card badges the first match and the sender resolver takes whichever row
+     * Postgres happens to return, so the caller ID recipients saw could be the number the card
+     * explicitly labelled as NOT the calls number. Pressing "Use for calls" on the other one
+     * wrote a purpose that was already there: a control that visibly did nothing.
+     *
+     * Demoting the others to "marketing" is safe for a local number: the resolver splits by
+     * CAPABILITY first, so a local can never become the SMS sender whatever its purpose says,
+     * and campaign-scoped resolution matches on campaignId rather than purpose.
+     */
+    return this.prisma.$transaction(async (tx) => {
+      await tx.telephonyPhoneNumber.updateMany({
+        where: {
+          tenantId: number.tenantId,
+          id: { not: numberId },
+          purpose: { in: ["voice", "transactional"] },
+        },
+        data: { purpose: "marketing" },
+      });
+      return tx.telephonyPhoneNumber.update({ where: { id: numberId }, data });
     });
   }
 

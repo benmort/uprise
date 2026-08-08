@@ -23,6 +23,7 @@ import {
 } from "@/lib/api";
 import { tourComposerIntent } from "@/lib/tours/uprise-tour";
 import { buildBlastPayload } from "@/lib/blasts/blast-payload";
+import { describeBlastSendOutcome } from "@/lib/blasts/send-outcome";
 import { replacementAudienceId, shouldReplaceAudience } from "@/lib/blasts/audience-selection";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -622,13 +623,13 @@ export default function BlastComposerPage() {
         setActionMessage(sent.error);
         return;
       }
-      setStatus(String((sent.data as any).blast?.status || "SENT"));
-      setActionMessage(`Blast dispatched: ${(sent.data as any).sent || 0} sent`);
-      showToast({
-        tone: "success",
-        title: "Blast sent",
-        description: `${(sent.data as any).sent || 0} recipients queued.`,
-      });
+      // The send endpoint answers with two different shapes and this read only understood one —
+      // see describeBlastSendOutcome. On the queued path (production) there is no `sent` field,
+      // so `?? 0` told organisers "0 recipients queued" after a perfectly good send.
+      const outcome = describeBlastSendOutcome(sent.data);
+      setStatus(outcome.status);
+      setActionMessage(outcome.message);
+      showToast({ tone: "success", title: outcome.title, description: outcome.message });
       router.push(`/blasts/${encodeURIComponent(id)}`);
     } finally {
       setSendingBlast(false);

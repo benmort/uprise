@@ -155,7 +155,14 @@ export default function AudienceShowPage() {
         if (!contactsRes.ok) {
           setContacts([]);
           setContactsTotal(0);
-          if (!error) setError(contactsRes.error);
+          // Decide from THIS pass's audience result, not from the `error` state.
+          //
+          // `if (!error)` read the value captured when the effect was created, so once anything
+          // had failed once, `error` was still non-empty on the next run and the new contacts
+          // error was dropped — the table emptied itself and said nothing about why. Whether the
+          // audience load failed is known right here, which is what the guard actually meant:
+          // an audience error outranks a contacts error, and was already set above.
+          if (audienceRes.ok) setError(contactsRes.error);
         } else {
           setContacts((contactsRes.data.rows || []) as AudienceContact[]);
           setContactsTotal(Number(contactsRes.data.total || 0));

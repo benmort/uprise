@@ -177,6 +177,8 @@ function setup() {
       findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn(async (args: any) => ({ ...args.data })),
       update: jest.fn(async (args: any) => ({ ...makeNumber(), ...args.data })),
+      // setNickname demotes any OTHER calls number so the tenant has exactly one.
+      updateMany: jest.fn(async () => ({ count: 0 })),
     },
     tenant: { findUnique: jest.fn(async () => ({ id: TENANT_ID, name: "Test Tenant" })) },
     // Complete org identification by default so startRun's provisioning gate passes;
@@ -2009,6 +2011,45 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
           ).rejects.toMatchObject({ response: { error: { code: "VOICE_NUMBER_REQUIRED" } } });
           expect(prisma.telephonyPhoneNumber.update).not.toHaveBeenCalled();
         }
+      });
+
+      /**
+       * Exactly one calls number per tenant. Provisioning stamps every local "voice", so a tenant
+       * with two locals had two and nothing broke the tie — the resolver took whichever row came
+       * back first, so the caller ID could be the number the card labels as NOT the calls number,
+       * and "Use for calls" on the other one wrote a value that was already there.
+       */
+      it("demotes any other calls number so the choice is exclusive", async () => {
+        const { service, prisma } = setup();
+        prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(
+          makeNumber({ phoneNumberE164: "+61255501234" }),
+        );
+
+        await service.setNickname(NUMBER_ID, undefined, TENANT_ID, "voice");
+
+        expect(prisma.telephonyPhoneNumber.updateMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              tenantId: TENANT_ID,
+              id: { not: NUMBER_ID },
+              purpose: { in: ["voice", "transactional"] },
+            }),
+            data: { purpose: "marketing" },
+          }),
+        );
+        expect(prisma.telephonyPhoneNumber.update).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { id: NUMBER_ID }, data: { purpose: "voice" } }),
+        );
+      });
+
+      // Setting a NON-calls purpose must not touch anyone else's row.
+      it("demotes nothing when the new purpose is not the calls one", async () => {
+        const { service, prisma } = setup();
+        prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(makeNumber());
+
+        await service.setNickname(NUMBER_ID, undefined, TENANT_ID, "marketing");
+
+        expect(prisma.telephonyPhoneNumber.updateMany).not.toHaveBeenCalled();
       });
 
       it("leaves the other purposes alone", async () => {

@@ -16,6 +16,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useToast } from "@/components/ui/toast";
+import { getFailedRecipientCount, getLastActionLabel } from "@/lib/blasts/recipient-activity";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { StateRegion } from "@/components/shell/state-region";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -45,6 +47,11 @@ export default function BlastDetailsPage() {
   const [noPermission, setNoPermission] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [statusDistribution, setStatusDistribution] = useState<Array<Record<string, unknown>>>([]);
+  const [retrying, setRetrying] = useState(false);
+  const { showToast } = useToast();
+  // Named on the retry control so its true scope is visible BEFORE it is pressed — the button it
+  // replaced looked per-recipient and re-sent to all of them.
+  const failedRecipientCount = getFailedRecipientCount(statusDistribution);
   const [streamStatus, setStreamStatus] = useState("idle");
   const trendRange: number | "all" = trendWindow === "all" ? "all" : Number(trendWindow);
 
@@ -343,9 +350,40 @@ export default function BlastDetailsPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Recipient Activity Log</CardTitle>
-          <Button variant="outline" onClick={() => blastId && void loadForBlast(blastId, activityPage)}>
-            Refresh Live
-          </Button>
+          <div className="flex items-center gap-2">
+            {failedRecipientCount > 0 ? (
+              <Button
+                variant="outline"
+                disabled={retrying}
+                onClick={async () => {
+                  if (!blastId) return;
+                  setRetrying(true);
+                  const res = await retryBlast(blastId);
+                  setRetrying(false);
+                  // The old per-row button discarded this, so a 403 looked like a no-op.
+                  if (!res.ok) {
+                    showToast({ tone: "error", title: "Couldn't retry", description: res.error });
+                    return;
+                  }
+                  showToast({
+                    tone: "success",
+                    title: "Retry queued",
+                    description: `Retrying ${failedRecipientCount.toLocaleString()} failed ${
+                      failedRecipientCount === 1 ? "recipient" : "recipients"
+                    }.`,
+                  });
+                  await loadForBlast(blastId, activityPage);
+                }}
+              >
+                {retrying
+                  ? "Retrying…"
+                  : `Retry ${failedRecipientCount.toLocaleString()} failed`}
+              </Button>
+            ) : null}
+            <Button variant="outline" onClick={() => blastId && void loadForBlast(blastId, activityPage)}>
+              Refresh Live
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4 overflow-x-auto">
           <DataTable
@@ -375,23 +413,15 @@ export default function BlastDetailsPage() {
               {
                 key: "action",
                 header: "Action",
-                cell: (row) =>
-                  String(row.status) === "FAILED" ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        await retryBlast(blastId);
-                        await loadForBlast(blastId, activityPage);
-                      }}
-                    >
-                      Retry
-                    </Button>
-                  ) : (
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href="/inbox">View Chat</Link>
-                    </Button>
-                  ),
+                // No per-row Retry. It called the BLAST-wide retryBlast(blastId), so one click in
+                // one recipient's row re-sent to every failed recipient — real money and real
+                // messages, with nothing saying so. The action now lives in the card header where
+                // its scope is visible and its count is named.
+                cell: () => (
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href="/inbox">View Chat</Link>
+                  </Button>
+                ),
               },
             ]}
           />
@@ -453,12 +483,6 @@ function shouldShowReasonPopover(row: Record<string, unknown>): boolean {
   return (status === "FAILED" || status === "SKIPPED") && Boolean(getRecipientReason(row));
 }
 
-function getLastActionLabel(row: Record<string, unknown>): string {
-  const status = String(row.status || "");
-  if (status === "FAILED") return String(row.failureCategory || "Failed");
-  if (status === "SKIPPED") return "Skipped";
-  return String(row.failureCategory || "Message Sent");
-}
 
 function getLatestTraceSummary(row: Record<string, unknown>): string | null {
   const metadata =
