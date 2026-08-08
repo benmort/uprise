@@ -42,7 +42,14 @@ export const HEAT_FACTOR_LABELS: Record<HeatFactor, string> = {
 };
 
 /** Band → ACTION labels, band 1 (coldest) first: index = band − 1. Band 5 = hottest. */
-export const HEAT_BAND_LABELS = ["Skip – no data", "Low", "Moderate", "Strong", "Knock first"] as const;
+/**
+ * Band 1 is a SCORED band — the bottom within-boundary quintile — so its label must never say
+ * "no data". It did, and that collapsed the one distinction this module exists to preserve:
+ * "we scored this and it is the worst turf here" (settled) versus "we could not score this"
+ * (a data gap worth chasing). The legend already carries its own swatch for the hatched,
+ * genuinely unscored cells, and heatBandLabel(null) still answers "No data".
+ */
+export const HEAT_BAND_LABELS = ["Skip", "Low", "Moderate", "Strong", "Knock first"] as const;
 
 /** The action label for a cell's band; a null band (insufficient data) reads as no data. */
 export function heatBandLabel(band: number | null): string {

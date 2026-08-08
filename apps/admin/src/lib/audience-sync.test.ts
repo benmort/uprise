@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  describeSyncPollOutcome,
   deriveSyncBadge,
   isTerminalSync,
   latestJobForAudience,
@@ -108,5 +109,48 @@ describe("pollSyncJob", () => {
     const result = await pollSyncJob({ audienceId: "aud1", fetchJobs, sleep, maxAttempts: 5 });
     expect(result?.status).toBe("SUCCEEDED");
     expect(fetchJobs).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("describeSyncPollOutcome", () => {
+  const job = (over: Partial<IntegrationSyncJob> = {}) =>
+    ({ id: "j1", status: "SUCCEEDED", syncedCount: 42, errorSummary: null, ...over }) as IntegrationSyncJob;
+
+  /**
+   * THE regression. pollSyncJob returns null when its budget (40 x 2 s) runs out before the job
+   * finishes, and the card's FAILED/SUCCEEDED pair had no else — so the message stayed on
+   * "Sync queued (job abc). Tracking progress…" and the success panel never came. Nothing polls
+   * again, so an organiser watched that line indefinitely for a sync that had gone fine. A
+   * chunked pull re-enqueues itself per page batch, so exceeding the budget is ordinary.
+   */
+  it("names the timeout instead of letting it fall through", () => {
+    expect(describeSyncPollOutcome(null)).toEqual({ kind: "still-running" });
+    expect(describeSyncPollOutcome(undefined)).toEqual({ kind: "still-running" });
+  });
+
+  // A job handed back mid-flight is the same situation as a timeout, not a success.
+  it("treats a non-terminal job as still running", () => {
+    expect(describeSyncPollOutcome(job({ status: "RUNNING" })).kind).toBe("still-running");
+    expect(describeSyncPollOutcome(job({ status: "QUEUED" })).kind).toBe("still-running");
+  });
+
+  it("reports a success with its count and its stats blob", () => {
+    const stats = JSON.stringify({ kept: 40, skipped: 2 });
+    expect(describeSyncPollOutcome(job({ errorSummary: stats }))).toEqual({
+      kind: "succeeded",
+      syncedCount: 42,
+      statsJson: stats,
+    });
+  });
+
+  it("reports a failure with a readable reason", () => {
+    expect(
+      describeSyncPollOutcome(job({ status: "FAILED", errorSummary: '{"error":"401 from provider"}' })),
+    ).toEqual({ kind: "failed", reason: "401 from provider" });
+  });
+
+  it("falls back to the raw message when the summary is not JSON", () => {
+    const out = describeSyncPollOutcome(job({ status: "FAILED", errorSummary: "connection reset" }));
+    expect(out).toEqual({ kind: "failed", reason: "connection reset" });
   });
 });

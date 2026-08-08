@@ -169,3 +169,22 @@ export function doorsInsideRing(
   }
   return doors;
 }
+
+
+/**
+ * The drawn ring's door estimate, and whether it could be priced at all.
+ *
+ * `areas` is null on a draw-only campaign: the claimable endpoint gates `?layer=` on the AREA
+ * mode, so the carve screen never fetches address counts there. Passing `?? []` into
+ * doorsInsideRing turned that into a confident 0 — the readout said "Nothing picked yet" beside a
+ * real polygon, and the oversize guard (`doors > cap`) could never fire, so a volunteer could
+ * carve a turf far beyond a shift's work and be told nothing. An unpriced turf is not a small one;
+ * `known: false` says which of the two this is so the screen can word it honestly.
+ */
+export function drawDoorEstimate(
+  ring: Ring,
+  areas: Array<{ geometry: unknown; properties: { addresses?: number } }> | null | undefined,
+): { doors: number; known: boolean } {
+  if (!areas) return { doors: 0, known: false };
+  return { doors: doorsInsideRing(ring, areas), known: true };
+}

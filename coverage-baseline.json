@@ -1,8 +1,8 @@
 {
-  "$comment": "Coverage ratchet for scripts/coverage-check.mjs. Each value is the committed no-regression floor (total line %) for that package's instrumented scope: apps/api = all src; web apps + worker/field = src/lib logic layer; pure packages = src/**. It only ever moves UP \u2013 run `pnpm coverage:check --update-baseline` once total coverage genuinely rises, and commit the bump. The patch floor (new/changed lines >= 80%) is separate and set in the script. See dev/ai/how-to/definition-of-done.md. New scopes start at a 10% floor (actual coverage is higher) \u2014 ratchet up as it grows.",
-  "apps/api": 83,
-  "apps/admin": 29,
-  "packages/field": 80,
+  "$comment": "Coverage ratchet for scripts/coverage-check.mjs. Each value is the committed no-regression floor (total line %) for that package's instrumented scope: apps/api = all src; web apps + worker/field = src/lib logic layer; pure packages = src/**. It only ever moves UP – run `pnpm coverage:check --update-baseline` once total coverage genuinely rises, and commit the bump. The patch floor (new/changed lines >= 80%) is separate and set in the script. See dev/ai/how-to/definition-of-done.md. New scopes start at a 10% floor (actual coverage is higher) — ratchet up as it grows.",
+  "apps/api": 88.48,
+  "apps/admin": 88.52,
+  "packages/field": 91.73,
   "packages/events": 10,
   "packages/permissions": 10,
   "packages/flags": 10,

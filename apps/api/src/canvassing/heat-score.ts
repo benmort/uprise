@@ -120,7 +120,9 @@ export interface HeatMeta {
   sa1Count: number;
   /** Within-boundary score quantiles [q20, q40, q60, q80] over non-null scores. */
   breaks: number[];
-  /** Share of cells (0–1) for which each factor contributed. */
+  /** Share of cells (0–1) for which each factor's DATA resolved — availability, independent of
+   *  weight. Not "contributed to the blend": a weight-0 factor contributes nothing yet may have
+   *  complete data, and that difference is exactly what the panel's coverage bar is asked. */
   factorCoverage: Record<HeatFactor, number>;
   /** Rank-degenerate signals (constant within the boundary) — they contribute 0.5 flat. */
   constantFactors: HeatFactor[];
@@ -305,8 +307,20 @@ export function scoreCells(rows: RawHeatRow[], opts: HeatScoreOptions): { cells:
       subScores.freshness = 1 - Math.min(1, row.knockDecay / row.doors);
     }
 
+    /**
+     * Coverage is DATA availability, not blend membership.
+     *
+     * `available` is weight-filtered on purpose — a weight-0 factor must never join the blend nor
+     * count toward MIN_AVAILABLE_WEIGHT_SHARE. Deriving the coverage counter from it too pinned
+     * coverage at exactly 0 for every factor at weight 0, which is all three opt-in signals
+     * (community, progressive, informality) under every preset — the default state of every
+     * campaign. The panel then told organisers "covers 0% of areas" directly beneath copy
+     * inviting them to raise a slider and blend those signals in, so nobody ever did, even with
+     * complete ABS, referendum and informality figures for every SA1 in the boundary.
+     */
+    for (const f of HEAT_FACTORS) if (subScores[f] != null) factorCounts[f] += 1;
+
     const available = HEAT_FACTORS.filter((f) => subScores[f] != null && (weights[f] ?? 0) > 0);
-    for (const f of available) factorCounts[f] += 1;
 
     const availableWeight = available.reduce((s, f) => s + weights[f], 0);
     let score: number | null = null;

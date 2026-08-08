@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   addVertex,
   doorsInsideRing,
+  drawDoorEstimate,
   formatArea,
   MIN_TURF_AREA_SQM,
   outerRingCentroid,
+  type Ring,
   ringAreaSqM,
   ringIsSimple,
   ringToPolygon,
@@ -209,5 +211,53 @@ describe("doorsInsideRing", () => {
   it("is zero before the ring encloses anything", () => {
     const partial: LngLat[] = [[144.95, -37.81], [144.955, -37.81]];
     expect(doorsInsideRing(partial, [areaAt(144.952, -37.812, 40)])).toBe(0);
+  });
+});
+
+describe("drawDoorEstimate", () => {
+  // Same fixture shape as the doorsInsideRing tests above (they are scoped to their own
+  // describe): a block ring, and one small area whose centroid falls inside it.
+  const square: Ring = [
+    [144.95, -37.81],
+    [144.96, -37.81],
+    [144.96, -37.82],
+    [144.95, -37.82],
+  ];
+  const areas = [
+    {
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [144.952, -37.812],
+            [144.9521, -37.812],
+            [144.9521, -37.8119],
+            [144.952, -37.8119],
+          ],
+        ],
+      },
+      properties: { addresses: 120 },
+    },
+  ];
+
+  /**
+   * THE regression. `areas` is null on a draw-only campaign — the claimable endpoint gates
+   * `?layer=` on AREA mode, so the carve screen never fetches address counts there. Passing
+   * `?? []` in turned that into a confident zero: the readout said "Nothing picked yet" beside a
+   * real polygon, and the oversize guard (`doors > cap`) could never fire, so a volunteer could
+   * carve a turf far beyond a shift's work and be told nothing at all.
+   */
+  it("reports that a draw-only campaign could not be priced, rather than zero doors", () => {
+    expect(drawDoorEstimate(square, null)).toEqual({ doors: 0, known: false });
+    expect(drawDoorEstimate(square, undefined)).toEqual({ doors: 0, known: false });
+  });
+
+  it("prices the ring when address data is there", () => {
+    expect(drawDoorEstimate(square, areas)).toEqual({ doors: 120, known: true });
+  });
+
+  // A genuinely empty area list IS a real zero — the campaign has data, this ring just has none.
+  it("distinguishes a real zero from an unpriceable one", () => {
+    expect(drawDoorEstimate(square, [])).toEqual({ doors: 0, known: true });
   });
 });

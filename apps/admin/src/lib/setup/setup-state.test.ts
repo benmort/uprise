@@ -69,15 +69,34 @@ describe("flowProgress / overallProgress", () => {
     });
   });
 
-  it("overallProgress counts identity + organisation only — account/channels are extras", () => {
+  /**
+   * The headline counts every flow that can BLOCK completion, so it agrees with setupComplete()
+   * and with the "Next:" line beneath it. It used to exclude channels, which is the flow an owner
+   * is usually still in: identity and organisation done, no number yet, and the card read
+   * "6 of 6 steps done" with a full bar and "Your own channels are unlocked" directly above
+   * "Next: Your phone number". Only `account` is excluded — it is recommended-only polish.
+   */
+  it("overallProgress counts identity + organisation + channels; account is the only extra", () => {
     const s = state({
       identity: [step("verifyEmail", "todo"), step("confirmMobile", "done")],
       account: [step("enableTwofa", "recommended"), step("completeProfile", "recommended")],
       org: [step("businessLegal", "todo")],
       channels: [channel("phoneNumber", "none")],
     });
-    // identity 1/2 + organisation 0/1; account (2) and channels (1) excluded.
-    expect(overallProgress(s)).toEqual({ done: 1, total: 3 });
+    // identity 1/2 + organisation 0/1 + channels 0/1; account (2) excluded.
+    expect(overallProgress(s)).toEqual({ done: 1, total: 4 });
+  });
+
+  // The headline may never read "n of n" while a blocking step is outstanding — that pairing is
+  // the defect, and it is what an owner reads as "nothing left to do".
+  it("never reports complete while a channel step is outstanding", () => {
+    const s = state({
+      identity: [step("verifyEmail", "done"), step("confirmMobile", "done")],
+      org: [step("businessLegal", "done")],
+      channels: [channel("phoneNumber", "none")],
+    });
+    const p = overallProgress(s);
+    expect(p.done).toBeLessThan(p.total);
   });
 
   it("overallProgress skips non-applicable flows (organiser: identity only)", () => {

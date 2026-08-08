@@ -21,6 +21,11 @@ export interface OtpInputProps {
  * steps back on backspace, supports paste. Emits the joined string via onChange so
  * callers pass it straight to the verify call.
  */
+/** Split a joined code into fixed slots. The interior-gap handling is the whole point — a joined
+ *  string cannot express one, which is what made a mid-code correction eat the following digit. */
+const toSlots = (value: string, length: number): string[] =>
+  Array.from({ length }, (_, i) => value[i] ?? "");
+
 const OtpInput = React.forwardRef<HTMLInputElement, OtpInputProps>(
   ({ value, onChange, length = 6, disabled, autoFocus, onComplete, className }, _ref) => {
     const refs = React.useRef<(HTMLInputElement | null)[]>([]);
@@ -31,13 +36,27 @@ const OtpInput = React.forwardRef<HTMLInputElement, OtpInputProps>(
       // Once on mount — a later value change shouldn't yank focus back to the first box.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-    const digits = React.useMemo(() => {
-      const arr = value.split("").slice(0, length);
-      return Array.from({ length }, (_, i) => arr[i] ?? "");
+    /**
+     * The SLOTS are the source of truth, not the joined string.
+     *
+     * A joined value cannot express an interior gap. Deriving the boxes from it left-packed the
+     * digits, so clearing box 3 of "123456" emitted "12456" and re-derived as [1,2,4,5,6,""] —
+     * every later digit slid one box left and the last one vanished. Correcting a single mistyped
+     * digit (click the box, Backspace, retype), which is what everyone does, silently ate the next
+     * digit and left the submit button dead because the code was one short. The boxes still looked
+     * like a plausible code, so nothing on screen showed what had happened.
+     *
+     * Re-seed from the prop only when it is NOT our own emission coming back, so a caller clearing
+     * the field (Resend) still works while our own onChange cannot stomp the slots.
+     */
+    const [digits, setDigits] = React.useState<string[]>(() => toSlots(value, length));
+    React.useEffect(() => {
+      setDigits((prev) => (prev.join("") === value ? prev : toSlots(value, length)));
     }, [value, length]);
 
     const emit = (next: string[]) => {
       const joined = next.join("");
+      setDigits(next);
       onChange(joined);
       // Check the SLOTS for a gap, not the joined string. `"1234".includes("")` is true for every
       // string in JS, so the old `!joined.includes("")` was always false and `onComplete` could

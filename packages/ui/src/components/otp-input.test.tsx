@@ -46,6 +46,55 @@ describe("OtpInput", () => {
     expect(onComplete).not.toHaveBeenCalled();
   });
 
+  /**
+   * Correcting ONE mistyped digit, which is what everyone does with an SMS code.
+   *
+   * The boxes used to be derived from the joined value by left-packing, and a joined string
+   * cannot express an interior gap: clearing box 3 of "123456" emitted "12456", which re-derived
+   * as [1,2,4,5,6,""]. Every later digit slid one box left, the last one vanished, and the submit
+   * button went dead because the code was a digit short — while the boxes still looked like a
+   * plausible code, so nothing on screen showed what had happened.
+   */
+  it("clearing a middle box leaves every other digit where it was", () => {
+    let value = "123456";
+    function handle(next: string) {
+      value = next;
+      view.rerender(<OtpInput value={value} length={6} onChange={handle} />);
+    }
+    const view = render(<OtpInput value={value} length={6} onChange={handle} />);
+
+    fireEvent.change(boxes()[2], { target: { value: "" } });
+
+    expect(boxes().map((b) => b.value)).toEqual(["1", "2", "", "4", "5", "6"]);
+  });
+
+  it("retyping the corrected digit restores the whole code and completes", () => {
+    const onComplete = vi.fn();
+    let value = "123456";
+    function handle(next: string) {
+      value = next;
+      view.rerender(<OtpInput value={value} length={6} onChange={handle} onComplete={onComplete} />);
+    }
+    const view = render(
+      <OtpInput value={value} length={6} onChange={handle} onComplete={onComplete} />,
+    );
+
+    fireEvent.change(boxes()[2], { target: { value: "" } });
+    fireEvent.change(boxes()[2], { target: { value: "9" } });
+
+    expect(boxes().map((b) => b.value).join("")).toBe("129456");
+    expect(onComplete).toHaveBeenCalledWith("129456");
+  });
+
+  // A caller clearing the field (the Resend button) must still empty every box — the slot state
+  // must not ignore a genuine external change.
+  it("a caller clearing the value empties every box", () => {
+    const view = render(<OtpInput value="123456" length={6} onChange={() => {}} />);
+    expect(boxes()[0].value).toBe("1");
+    view.rerender(<OtpInput value="" length={6} onChange={() => {}} />);
+    expect(boxes().map((b) => b.value)).toEqual(["", "", "", "", "", ""]);
+  });
+
   it("ignores a non-numeric keystroke", () => {
     const onChange = vi.fn();
     render(<OtpInput value="" length={4} onChange={onChange} />);

@@ -18,7 +18,11 @@ import {
   toImportSources,
   type ImportSource,
 } from "@/lib/integration-sources";
-import { pollSyncJob, type IntegrationSyncJob } from "@/lib/audience-sync";
+import {
+  describeSyncPollOutcome,
+  pollSyncJob,
+  type IntegrationSyncJob,
+} from "@/lib/audience-sync";
 import { importSummaryLine, type SyncRunStats } from "@/lib/sync-health";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectItem } from "@/components/ui/select";
@@ -33,16 +37,6 @@ import { Alert, SegmentedControl } from "@uprise/ui";
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** Pull a human-readable reason out of a sync job's errorSummary JSON blob. */
-function summariseSyncError(errorSummary: string | null | undefined): string {
-  if (!errorSummary) return "";
-  try {
-    const parsed = JSON.parse(errorSummary) as { error?: unknown };
-    return typeof parsed.error === "string" ? parsed.error : "";
-  } catch {
-    return errorSummary.slice(0, 200);
-  }
-}
-
 /** What a completed sync leaves behind for the success panel. */
 type SyncSuccess = {
   audienceId: string;
@@ -201,34 +195,48 @@ export function PullListCard({
           shouldContinue: () => mountedRef.current,
         });
         if (!mountedRef.current) return;
-        if (terminal?.status === "FAILED") {
-          const reason = summariseSyncError(terminal.errorSummary);
+        // Three outcomes, all named. The old pair had no else, so a poll that ran out of budget
+        // (40 x 2 s, far shorter than a chunked pull) left the card on "Tracking progress…"
+        // forever for a sync that had finished perfectly well — see describeSyncPollOutcome.
+        const outcome = describeSyncPollOutcome(terminal);
+        if (outcome.kind === "still-running") {
+          setSyncMessage(
+            "This list is big enough that the import is still running in the background. " +
+              "It will keep going without this page open — refresh in a few minutes to see the result.",
+          );
+          showToast({
+            tone: "info",
+            title: "Still importing",
+            description: "Large lists finish in the background. Refresh shortly to see the result.",
+          });
+        } else if (outcome.kind === "failed") {
+          const reason = outcome.reason;
           setSyncMessage(`Sync failed${reason ? `: ${reason}` : ""}.`);
           showToast({
             tone: "error",
             title: "Integration sync failed",
             description: reason || "The worker could not complete this sync.",
           });
-        } else if (terminal?.status === "SUCCEEDED") {
+        } else {
           setSyncMessage("");
           // The terminal job's errorSummary carries the final stats blob — parse it for
           // the honest counts line (email-only kept, skipped) on the success panel.
           let stats: SyncRunStats | null = null;
           try {
-            stats = terminal.errorSummary ? (JSON.parse(terminal.errorSummary) as SyncRunStats) : null;
+            stats = outcome.statsJson ? (JSON.parse(outcome.statsJson) as SyncRunStats) : null;
           } catch {
             stats = null;
           }
           setSuccess({
             audienceId,
             listName: selectedListName || "your list",
-            syncedCount: Number(terminal.syncedCount ?? 0),
+            syncedCount: outcome.syncedCount,
             stats,
           });
           showToast({
             tone: "success",
             title: "Integration sync completed",
-            description: `Synced ${Number(terminal.syncedCount ?? 0)} contacts.`,
+            description: `Synced ${outcome.syncedCount.toLocaleString()} contacts.`,
           });
         }
         onSynced?.(terminal);

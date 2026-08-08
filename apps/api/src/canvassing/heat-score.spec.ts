@@ -50,6 +50,22 @@ const COVERAGE = HEAT_PRESETS.coverage;
 const PERSUASION = HEAT_PRESETS.persuasion;
 
 describe("hazenRanks", () => {
+  /**
+   * Coverage answers "do we have data for this signal here", which is the question the panel's
+   * bar exists for. It used to be derived from the weight-filtered blend list, so the three opt-in
+   * signals — weight 0 in every preset, i.e. every campaign by default — reported 0% coverage no
+   * matter how complete their data was, directly beneath copy inviting the organiser to blend
+   * them in.
+   */
+  it("reports data coverage for weight-0 signals without blending them", () => {
+    const rows = boundary().map((r) => ({ ...r, referendumYesPct: 60 }));
+    const { cells, meta } = scoreCells(rows, { weights: HEAT_PRESETS.coverage });
+    expect(meta.factorCoverage.community).toBe(1);
+    expect(meta.factorCoverage.informality).toBe(1);
+    // Still excluded from the blend, so scores are untouched.
+    for (const c of cells) expect(c.available).not.toContain("community");
+  });
+
   it("ranks with the Hazen (r−0.5)/N convention", () => {
     expect(hazenRanks([10, 20, 30])).toEqual([0.5 / 3, 1.5 / 3, 2.5 / 3]);
   });

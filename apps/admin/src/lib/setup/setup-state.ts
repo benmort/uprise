@@ -41,8 +41,18 @@ export function flowsOf(state: TenantSetupState): Array<{ key: SetupFlowKey; ste
   return out;
 }
 
-/** Flows in the HEADLINE "n of m" count — account and channels are extras, not steps. */
-const COUNTED_FLOWS = new Set<SetupFlowKey>(["identity", "organisation"]);
+/**
+ * Flows in the HEADLINE "n of m" count — every flow that can BLOCK completion, which is exactly
+ * what setupComplete() gates on. Account is the only exclusion: it is recommended-only polish.
+ *
+ * Channels must be counted. While they were not, an owner with identity and organisation finished
+ * but no number yet — the state everyone passes through, since provisioning is gated on those org
+ * details — was told "6 of 6 steps done" with a full bar, a 6/6 tracker pill and "Your own
+ * channels are unlocked", directly above "Next: Your phone number". nextStep() scans every flow
+ * while the count skipped the very flow it was pointing at. Nothing was unlocked: their texts,
+ * calls and email still went out on shared Uprise identities.
+ */
+const COUNTED_FLOWS = new Set<SetupFlowKey>(["identity", "organisation", "channels"]);
 
 export function flowProgress(steps: AnyStep[]): { done: number; total: number } {
   const countable = steps.filter(counted);

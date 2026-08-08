@@ -27,7 +27,17 @@ export default defineConfig({
       // to be disabled. So "total %" here means logic coverage, and the patch floor bites the
       // code unit tests are the right tool for.
       include: ["src/lib/**/*.ts", "src/lib/**/*.tsx"],
-      exclude: ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.d.ts"],
+      exclude: [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/**/*.d.ts",
+        // A 2 800-line GENERATED lookup table with one function at the bottom. Instrumented, it
+        // was a third of every line in scope and went to 100% the moment anything imported it —
+        // so the package total read 92% while the code that actually branches sat far lower, and
+        // the ratchet would have locked that in. Its one function is tested in
+        // twilio-error-codes.test.ts; the data itself has no branches to cover.
+        "src/lib/twilio-error-codes.ts",
+      ],
       reporter: ["lcov", "json-summary", "text-summary"],
       reportsDirectory: "coverage",
     },

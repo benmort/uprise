@@ -46,7 +46,10 @@ describe("HEAT_FACTORS", () => {
 describe("HEAT_BAND_LABELS / heatBandLabel", () => {
   it("labels bands by action, band 5 hottest = Knock first", () => {
     expect(HEAT_BAND_LABELS).toHaveLength(5);
-    expect(heatBandLabel(1)).toBe("Skip – no data");
+    // Band 1 is a SCORED band — the bottom quintile within the boundary. Labelling it "no data"
+    // made a deliberately-skipped area indistinguishable from one that could not be scored, and
+    // those call for different actions. "No data" belongs to the null band alone, asserted below.
+    expect(heatBandLabel(1)).toBe("Skip");
     expect(heatBandLabel(2)).toBe("Low");
     expect(heatBandLabel(3)).toBe("Moderate");
     expect(heatBandLabel(4)).toBe("Strong");
@@ -162,7 +165,7 @@ describe("heatLegendBands", () => {
   it("cuts five labelled bands from four breaks, open-ended at the top", () => {
     const bands = heatLegendBands([20, 40, 60, 80], RAMP);
     expect(bands).toEqual([
-      { band: 1, label: "Skip – no data", colour: "r0", lo: 0, hi: 20 },
+      { band: 1, label: "Skip", colour: "r0", lo: 0, hi: 20 },
       { band: 2, label: "Low", colour: "r1", lo: 20, hi: 40 },
       { band: 3, label: "Moderate", colour: "r2", lo: 40, hi: 60 },
       { band: 4, label: "Strong", colour: "r3", lo: 60, hi: 80 },

@@ -24,6 +24,7 @@ import {
   DRAW_ISSUE_MESSAGE,
   addVertex,
   doorsInsideRing,
+  drawDoorEstimate,
   formatArea,
   ringAreaSqM,
   ringToPolygon,
@@ -144,10 +145,11 @@ export function CarveTurf() {
   };
 
   // ── The running estimate, in the planner's numbers ────────────────────────
-  const doors =
-    mode === "area"
-      ? picked.reduce((n, p) => n + p.addresses, 0)
-      : doorsInsideRing(ring, areas?.features ?? []);
+  // `areas` is null on a draw-only campaign (the claimable endpoint gates ?layer= on AREA mode),
+  // and `?? []` used to turn that into a confident 0 door count — see drawDoorEstimate.
+  const drawn = drawDoorEstimate(ring, areas?.features ?? null);
+  const doors = mode === "area" ? picked.reduce((n, p) => n + p.addresses, 0) : drawn.doors;
+  const doorsKnown = mode === "area" || drawn.known;
   const estimate = useMemo(() => {
     if (doors <= 0) return null;
     const turf = buildTurf(doors, density.doorsPerBuilding, density.gapMetres);
@@ -305,6 +307,11 @@ export function CarveTurf() {
                   {doors.toLocaleString()} doors
                   {estimate ? ` · ~${formatHours(estimate.hours)}` : ""}
                 </>
+              ) : !doorsKnown && ring.length >= 3 ? (
+                // A drawn ring with no address data behind it. Saying "Nothing picked yet" beside
+                // a real polygon read as "this turf is empty", which is a different claim from
+                // "we cannot price it here" — and it is the one that let an oversized turf pass.
+                "Door count not available for this campaign"
               ) : (
                 "Nothing picked yet"
               )}

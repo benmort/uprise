@@ -99,3 +99,55 @@ export async function pollSyncJob({
   }
   return null;
 }
+
+
+/**
+ * A worker error summary, reduced to something an organiser can read. The blob is JSON when the
+ * run recorded stats and a bare string otherwise.
+ */
+export function summariseSyncError(errorSummary: string | null | undefined): string {
+  if (!errorSummary) return "";
+  try {
+    const parsed = JSON.parse(errorSummary) as { error?: unknown };
+    return typeof parsed.error === "string" ? parsed.error : "";
+  } catch {
+    // Not JSON — a bare provider message. Bounded, because it lands in a toast.
+    return errorSummary.slice(0, 200);
+  }
+}
+
+
+/**
+ * What the poll actually concluded.
+ *
+ * `pollSyncJob` returns `null` when its budget (40 attempts x 2 s, so roughly 80 s) runs out
+ * before the job reaches a terminal state, and the card treated that as "nothing to say": the
+ * FAILED / SUCCEEDED pair had no else, so the message stayed on "Sync queued (job abc). Tracking
+ * progress..." and the success panel never appeared. Nothing polls again — the effect only re-runs
+ * on an explicit reload — so an organiser watched that line indefinitely for a sync that had
+ * finished perfectly well.
+ *
+ * The budget is routinely exceeded by design: a chunked pull re-enqueues itself per page batch
+ * and stays RUNNING across many worker runs for a large list. So "still running" is an ordinary
+ * outcome, not an error, and naming it here is what stops it being dropped again.
+ */
+export type SyncPollOutcome =
+  | { kind: "failed"; reason: string }
+  | { kind: "succeeded"; syncedCount: number; statsJson: string | null }
+  | { kind: "still-running" };
+
+export function describeSyncPollOutcome(terminal: IntegrationSyncJob | null | undefined): SyncPollOutcome {
+  if (!terminal) return { kind: "still-running" };
+  if (terminal.status === "FAILED") {
+    return { kind: "failed", reason: summariseSyncError(terminal.errorSummary) };
+  }
+  if (terminal.status === "SUCCEEDED") {
+    return {
+      kind: "succeeded",
+      syncedCount: Number(terminal.syncedCount ?? 0),
+      statsJson: terminal.errorSummary ?? null,
+    };
+  }
+  // QUEUED or RUNNING handed back by a caller that did not wait — same situation as a timeout.
+  return { kind: "still-running" };
+}
