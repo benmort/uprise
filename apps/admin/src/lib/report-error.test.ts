@@ -1,9 +1,13 @@
+// @vitest-environment node
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { reportClientError } from "./report-error";
 
-// This suite runs under vitest's `node` environment (see vitest.config.ts), so there is
-// no real `window`. The reporter only ever touches `window.location`, so a stub is enough
-// – and it lets the SSR no-op be tested directly by leaving the stub off.
+// Pinned to the `node` environment by the pragma above. The suite's whole point is the SSR
+// branch — `reportClientError` no-ops when there is no `window` — and the runner default moved
+// to jsdom so hooks in src/lib could be tested at all. Under jsdom a real `window` exists, the
+// SSR branch becomes unreachable, and "no-ops on the server" starts POSTing. The reporter only
+// ever touches `window.location`, so a stub is enough here, and leaving the stub off is what
+// exercises the server path.
 const stubWindow = () =>
   vi.stubGlobal("window", { location: { pathname: "/dashboard", search: "?tab=live" } });
 

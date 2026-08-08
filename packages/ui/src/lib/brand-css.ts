@@ -90,10 +90,25 @@ export function brandVarsCss(brand: {
   const decls: string[] = [];
   const primary = brand.primaryColour?.trim();
   const secondary = brand.secondaryColour?.trim();
+  // The FOREGROUND tokens are `--on-primary` / `--on-secondary`, not `--*-foreground`.
+  //
+  // globals.css maps the Tailwind utilities through `@theme inline`:
+  //   --color-primary-foreground:   hsl(var(--on-primary));
+  //   --color-secondary-foreground: hsl(var(--on-secondary));
+  // so `text-secondary-foreground` resolves to `--on-secondary`. This wrote the contrast-picked
+  // ink to `--secondary-foreground`, which nothing in the repo reads — a dead token. The tenant's
+  // colour landed on the background and the ink stayed at the design-system default, so a pale
+  // brand colour rendered near-white text on it. Primary had it worse: it set no foreground at
+  // all, so `bg-primary text-primary-foreground` was always near-white ink whatever the tenant
+  // picked. Both now write the token the utilities actually read.
   if (primary) {
     decls.push(`--brand-primary: ${primary};`);
     const channels = hexToHslChannels(primary);
-    if (channels) decls.push(`--primary: ${channels};`);
+    if (channels) {
+      decls.push(`--primary: ${channels};`);
+      const fg = readableForegroundChannels(primary);
+      if (fg) decls.push(`--on-primary: ${fg};`);
+    }
   }
   if (secondary) {
     decls.push(`--brand-secondary: ${secondary};`);
@@ -101,7 +116,7 @@ export function brandVarsCss(brand: {
     if (channels) {
       decls.push(`--secondary: ${channels};`);
       const fg = readableForegroundChannels(secondary);
-      if (fg) decls.push(`--secondary-foreground: ${fg};`);
+      if (fg) decls.push(`--on-secondary: ${fg};`);
     }
   }
   return decls.length ? `:root{${decls.join("")}}` : "";

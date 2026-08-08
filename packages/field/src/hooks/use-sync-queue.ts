@@ -11,6 +11,41 @@ import { useOnlineStatus } from "./use-online-status";
 const EMPTY: Record<OutboxStatus, number> = { PENDING: 0, SYNCING: 0, DONE: 0, CONFLICT: 0 };
 
 /**
+ * ONE queue per tab, not one per component.
+ *
+ * `SyncQueue.flush` guards against re-entrancy with a private instance flag, and the IndexedDB
+ * store behind it is already module-scoped — so a queue per hook instance meant shared DATA
+ * behind private guards. Four instances are live at once (FieldShell, DoorEntry,
+ * AddHouseholdMember, SyncCentre), each with its own 30s interval and online listener.
+ *
+ * When signal returns, the `online` event flips every instance's state in a single React commit
+ * and they all call flush() back-to-back. IndexedDB requests settle on a task rather than a
+ * microtask, so every instance read the same PENDING snapshot before any of them marked a record
+ * SYNCING — and every instance POSTed every record. A duplicate ADD_CONTACT is a duplicate person
+ * on the doorstep record.
+ *
+ * Lazily constructed: these touch IndexedDB, which does not exist during SSR.
+ */
+let queueSingleton: SyncQueue | null = null;
+let photoStoreSingleton: PhotoBlobStore | null = null;
+
+function sharedQueue(): SyncQueue {
+  queueSingleton ??= new SyncQueue(new IndexedDbOutboxStore());
+  return queueSingleton;
+}
+
+function sharedPhotoStore(): PhotoBlobStore {
+  photoStoreSingleton ??= new IndexedDbPhotoBlobStore();
+  return photoStoreSingleton;
+}
+
+/** Test seam — drops the singletons so a case can start from a clean queue. */
+export function __resetSyncQueueSingletons(): void {
+  queueSingleton = null;
+  photoStoreSingleton = null;
+}
+
+/**
  * Wires the offline outbox. Every interaction — a door knock, its photo, an added household
  * member — is written locally at capture (nothing needs signal), then auto-flushed when online
  * (reconnect, tab focus, a 30s interval, and right after each enqueue). A knock references its
@@ -26,8 +61,8 @@ export function useSyncQueue() {
   const [conflicts, setConflicts] = useState<OutboxRecord[]>([]);
 
   if (queueRef.current === null && typeof window !== "undefined") {
-    queueRef.current = new SyncQueue(new IndexedDbOutboxStore());
-    photoStoreRef.current = new IndexedDbPhotoBlobStore();
+    queueRef.current = sharedQueue();
+    photoStoreRef.current = sharedPhotoStore();
   }
 
   const refreshCounts = useCallback(async () => {

@@ -1,3 +1,7 @@
+// @vitest-environment node
+// Pinned to node: this suite is ABOUT the environment — the SSR/no-window branch and the
+// fake-IndexedDB shim's structured clone, whose Blob identity differs under jsdom. The
+// package default moved to jsdom so the hooks in src/hooks could be tested at all.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   getVolunteerId,

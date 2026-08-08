@@ -5,9 +5,26 @@
 
 import type { OutboxRecord, SubmitResult } from "./sync-queue";
 
-/** Minimal result shape shared by the injected API calls (matches @uprise/api-client's ApiResult
- *  and the photo-upload helper). */
-export type ApiOutcome<T> = { ok: true; data: T } | { ok: false; error: string };
+/**
+ * Minimal result shape shared by the injected API calls (matches @uprise/api-client's ApiResult
+ * and the photo-upload helper).
+ *
+ * The failure FLAGS are carried through deliberately. They exist on `ApiResult` already, and
+ * narrowing them away left `classify` to re-derive retriability by pattern-matching the human
+ * error string — which silently lost a canvasser's work (see `classify`).
+ */
+export type ApiOutcome<T> =
+  | { ok: true; data: T }
+  | {
+      ok: false;
+      error: string;
+      /** HTTP status, when the API actually answered. */
+      status?: number;
+      /** The request definitively never left the device. */
+      networkError?: boolean;
+      /** We gave up waiting — it may still have landed. */
+      timedOut?: boolean;
+    };
 
 export interface DispatchDeps {
   uploadPhoto: (blob: Blob, filename: string, mimeType: string) => Promise<ApiOutcome<{ url: string }>>;
@@ -18,11 +35,41 @@ export interface DispatchDeps {
   lookup: (localId: string) => Promise<OutboxRecord | undefined>;
 }
 
-/** Transient (retry) vs terminal (CONFLICT). Network/timeout/5xx/auth are transient; a domain
- *  4xx (TURF_NOT_ASSIGNED, CONTACT_NOT_FOUND, storage-not-configured) is terminal. */
-export function classify(error: string): SubmitResult {
-  const transient = /network|fetch|timeout|Failed to fetch|Not authenticated|50\d/i.test(error);
-  return { ok: false, retriable: transient, error };
+/**
+ * Transient (retry) vs terminal (CONFLICT).
+ *
+ * Decided from the STRUCTURED failure, never from the wording. This used to regex the message for
+ * /network|fetch|timeout|…|50\d/, and the strings the stack actually produces do not match it:
+ *
+ *   "The request timed out after 30 seconds."   (api-client's own abort)  → missed
+ *   "Load failed"                               (WebKit's transport error) → missed
+ *   "Upload failed (401)"                       (the photo helper)         → missed
+ *   "Internal server error"                     (a 500 with a prose body)  → missed
+ *
+ * Chrome says "Failed to fetch" and matched; Safari says "Load failed" and did not. So a canvasser
+ * on an iOS PWA in marginal signal had every pending knock parked as a terminal CONFLICT —
+ * unrecoverable work, on the platform most likely to hit it.
+ *
+ * Rules, in order: a transport failure or a timeout is always retriable; an HTTP status decides
+ * itself (5xx and 401/408/429 retriable, other 4xx terminal); anything left with no structure at
+ * all is retriable, because losing a door knock is worse than trying it twice — the API's
+ * `localId` dedup is what makes that safe.
+ */
+export function classify(failure: {
+  error: string;
+  status?: number;
+  networkError?: boolean;
+  timedOut?: boolean;
+}): SubmitResult {
+  const { error, status, networkError, timedOut } = failure;
+  if (networkError || timedOut) return { ok: false, retriable: true, error };
+  if (typeof status === "number") {
+    const retriable = status >= 500 || status === 401 || status === 408 || status === 429;
+    return { ok: false, retriable, error };
+  }
+  // A domain refusal (TURF_NOT_ASSIGNED, CONTACT_NOT_FOUND, storage-not-configured) arrives as a
+  // 4xx and is caught above. With no status and no flags we cannot tell, so keep the work.
+  return { ok: false, retriable: true, error };
 }
 
 export function makeOutboxSubmit(deps: DispatchDeps): (record: OutboxRecord) => Promise<SubmitResult> {
@@ -42,13 +89,13 @@ export function makeOutboxSubmit(deps: DispatchDeps): (record: OutboxRecord) => 
         await deps.deleteBlob(blobKey); // free the quota once the bytes are on the server
         return { ok: true, result: { url: res.data.url } };
       }
-      return classify(res.error);
+      return classify(res);
     }
 
     if (record.type === "ADD_CONTACT") {
       const res = await deps.createContact(record.payload);
       if (res.ok) return { ok: true, result: { id: res.data.id } };
-      return classify(res.error);
+      return classify(res);
     }
 
     // DOOR_KNOCK — resolve any photo/contact references to real server values first.
@@ -85,6 +132,6 @@ export function makeOutboxSubmit(deps: DispatchDeps): (record: OutboxRecord) => 
 
     const res = await deps.submitKnock(payload);
     if (res.ok) return { ok: true };
-    return classify(res.error);
+    return classify(res);
   };
 }
