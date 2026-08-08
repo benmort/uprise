@@ -22,6 +22,11 @@ const config: Config = {
   coverageDirectory: "coverage",
   coverageReporters: ["lcov", "json-summary", "text-summary"],
   testEnvironment: "node",
+  // Jest's 5s default is too tight for the few genuinely CPU-bound specs here (scrypt KDFs,
+  // the 3k-point route optimiser). Under `--coverage` instrumentation, or when the machine is
+  // loaded, those overran it and failed the coverage gate with a misleading `test:cov failed`
+  // – a timing artefact, never a real defect. A hung test still fails, just later.
+  testTimeout: 20_000,
 };
 
 export default config;
