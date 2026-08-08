@@ -19,17 +19,25 @@ import { ProvisioningTimeline, telephonyStepIndex } from "./provisioning-timelin
 import { ProvisionNumberDialog } from "./provision-number-dialog";
 import { LockedAction } from "@/components/setup/locked-action";
 import { useSetupGate } from "@/components/setup/use-setup-state";
+import { isVoicePurpose } from "@/lib/telephony/number-purpose";
 
 type RunWithSteps = TelephonyProvisioningRun & { steps: TelephonyProvisioningStep[] };
 
 const LIVE_POLL_MS = 5_000;
 const TERMINAL = new Set(["ACTIVE", "FAILED"]);
 
-/** The number outbound calls originate from (voice-capable + marked transactional). */
+/**
+ * The number outbound calls originate from.
+ *
+ * Matches BOTH spellings. Provisioning stamps `purpose: "voice"` for a local number and the sender
+ * resolver matches on `"voice"`, but this card looked only for `"transactional"` — the value the
+ * nickname DTO could express. So a freshly provisioned calls number never appeared here and the
+ * card offered to provision one the tenant already had.
+ */
 function callsNumber(numbers: TelephonyPhoneNumber[]): TelephonyPhoneNumber | null {
   return (
     numbers.find(
-      (n) => n.status === "ACTIVE" && n.purpose === "transactional" && !isAuMobile(n.phoneNumberE164),
+      (n) => n.status === "ACTIVE" && isVoicePurpose(n.purpose) && !isAuMobile(n.phoneNumberE164),
     ) ?? null
   );
 }
@@ -125,7 +133,10 @@ export function TelephonyStatusCard({
 
   const useForCalls = async (n: TelephonyPhoneNumber) => {
     setSavingNumberId(n.id);
-    const res = await telephony.setPurpose(n.id, "transactional");
+    // "voice", not "transactional": the sender resolver matches calls on "voice", so writing the
+    // legacy alias set a purpose nothing downstream acted on — marked for calls in the UI and
+    // still not used for them.
+    const res = await telephony.setPurpose(n.id, "voice");
     setSavingNumberId(null);
     if (res.ok) setNumbers((prev) => prev.map((p) => (p.id === n.id ? res.data : p)));
     else setError(res.error);

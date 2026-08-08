@@ -800,6 +800,12 @@ describe("telephony + email provisioning", () => {
     expect(bodyOf(init)).toEqual({ purpose: "transactional" });
   });
 
+  it("telephony.setPurpose accepts the canonical \"voice\" purpose", async () => {
+    await telephony.setPurpose("n 1", "voice");
+    const [, init] = call();
+    expect(bodyOf(init)).toEqual({ purpose: "voice" });
+  });
+
   // The auth token only ever travels inbound, so the body has to carry it verbatim – and the
   // path must be the connect endpoint, not an account-scoped one: there is no account id yet,
   // which is the entire reason this call exists.

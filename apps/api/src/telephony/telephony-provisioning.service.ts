@@ -12,6 +12,7 @@ import {
 } from "@uprise/db";
 import type { DomainEventMap } from "@uprise/events";
 import { PrismaService } from "../prisma/prisma.service";
+import { normalisePurpose, type NumberPurposeInput } from "./number-purpose";
 import { loadOrgSetup } from "../org-profile/org-setup.snapshot";
 import { OutboxService, type AppendInput } from "../common/outbox/outbox.service";
 import { DomainLogger } from "../common/logging/domain-logger.service";
@@ -1577,16 +1578,19 @@ export class TelephonyProvisioningService {
     numberId: string,
     nickname: string | undefined,
     scopeTenantId?: string,
-    purpose?: "transactional" | "marketing" | "whatsapp",
+    // "transactional" is the legacy alias for "voice" — normalised below so exactly one value
+    // is ever persisted, and so the +614 guard cannot be bypassed by picking the other spelling.
+    purpose?: NumberPurposeInput,
   ) {
     const number = await this.prisma.telephonyPhoneNumber.findUnique({ where: { id: numberId } });
     if (!number) throw new NotFoundException("Number not found");
     if (scopeTenantId && number.tenantId !== scopeTenantId) {
       throw new ForbiddenException("You can only rename your own organisation's numbers");
     }
+    const nextPurpose = normalisePurpose(purpose);
     // An AU mobile can never serve as the calls number — refuse the repurpose
     // rather than silently letting the voice resolver skip it later.
-    if (purpose === "transactional" && number.phoneNumberE164.startsWith("+614")) {
+    if (nextPurpose === "voice" && number.phoneNumberE164.startsWith("+614")) {
       throw new ApiHttpException(
         "VOICE_NUMBER_REQUIRED",
         "Mobile numbers can't place outbound calls — only a local number can be the calls number.",
@@ -1598,7 +1602,7 @@ export class TelephonyProvisioningService {
       where: { id: numberId },
       data: {
         ...(nickname !== undefined ? { nickname: trimmed ? trimmed : null } : {}),
-        ...(purpose ? { purpose } : {}),
+        ...(nextPurpose ? { purpose: nextPurpose } : {}),
       },
     });
   }

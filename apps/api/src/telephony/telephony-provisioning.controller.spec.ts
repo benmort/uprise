@@ -154,6 +154,12 @@ describe("TelephonyProvisioningController", () => {
       expect(provisioning.setNickname).toHaveBeenCalledWith("num1", undefined, TENANT_ID, "transactional");
     });
 
+    it("passes the canonical \"voice\" purpose through unchanged", async () => {
+      const { controller, provisioning } = setup();
+      await controller.setNickname("num1", { purpose: "voice" } as any, ownerReq());
+      expect(provisioning.setNickname).toHaveBeenCalledWith("num1", undefined, TENANT_ID, "voice");
+    });
+
     it("a super-admin patches unscoped", async () => {
       const { controller, provisioning } = setup();
       await controller.setNickname("num1", { nickname: "Calls line" } as any, superReq());

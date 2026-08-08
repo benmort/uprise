@@ -150,6 +150,19 @@ describe("TelephonySenderResolver", () => {
       expect(sender?.from).toBe("+61255501234");
     });
 
+    // Two tenant-default voice-capable numbers: the deliberately purposed one must win the
+    // tiebreak even when it carries the legacy spelling – not lose to array order.
+    it("prefers a legacy \"transactional\"-purposed default over an unpurposed one", async () => {
+      const { resolver } = build({
+        numbers: [
+          num({ id: "n_other", phoneNumberE164: "+61255500000", numberType: "local", purpose: "marketing" }),
+          num({ id: "n_legacy", phoneNumberE164: "+61255501234", numberType: "local", purpose: "transactional" }),
+        ],
+      });
+      const sender = await resolver.resolve({ tenantId: "t1", purpose: "voice" });
+      expect(sender?.from).toBe("+61255501234");
+    });
+
     it("prefers a campaign-scoped local number over the tenant default", async () => {
       const { resolver } = build({
         numbers: [

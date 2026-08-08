@@ -1981,6 +1981,46 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
       );
     });
 
+    // Provisioning stamps "voice"; the DTO/UI could only say "transactional". The two never met,
+    // so a provisioned local number never resolved as the calls number. Both spellings now fold to
+    // one value — and the +614 guard must apply to BOTH, or picking the other spelling bypasses it.
+    describe("purpose vocabulary", () => {
+      it("persists the canonical 'voice' whichever spelling is sent", async () => {
+        for (const sent of ["voice", "transactional"] as const) {
+          const { service, prisma } = setup();
+          prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(
+            makeNumber({ phoneNumberE164: "+61255501234" }),
+          );
+          await service.setNickname(NUMBER_ID, undefined, TENANT_ID, sent);
+          expect(prisma.telephonyPhoneNumber.update).toHaveBeenCalledWith(
+            expect.objectContaining({ data: { purpose: "voice" } }),
+          );
+        }
+      });
+
+      it("refuses an AU mobile as the calls number under EITHER spelling", async () => {
+        for (const sent of ["voice", "transactional"] as const) {
+          const { service, prisma } = setup();
+          prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(
+            makeNumber({ phoneNumberE164: "+61412345678" }),
+          );
+          await expect(
+            service.setNickname(NUMBER_ID, undefined, TENANT_ID, sent),
+          ).rejects.toMatchObject({ response: { error: { code: "VOICE_NUMBER_REQUIRED" } } });
+          expect(prisma.telephonyPhoneNumber.update).not.toHaveBeenCalled();
+        }
+      });
+
+      it("leaves the other purposes alone", async () => {
+        const { service, prisma } = setup();
+        prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(makeNumber());
+        await service.setNickname(NUMBER_ID, undefined, TENANT_ID, "marketing");
+        expect(prisma.telephonyPhoneNumber.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: { purpose: "marketing" } }),
+        );
+      });
+    });
+
     it("forbids renaming another tenant's number", async () => {
       const { service, prisma } = setup();
       prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(makeNumber({ tenantId: "other-tenant" }));
@@ -2007,14 +2047,17 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
       expect(prisma.telephonyPhoneNumber.update).not.toHaveBeenCalled();
     });
 
-    it("repurposes a local number to transactional (and leaves the nickname untouched)", async () => {
+    // Sends the legacy "transactional" and PERSISTS "voice" — the value provisioning stamps and
+    // the sender resolver matches. Storing the alias verbatim is what left a repurposed number
+    // invisible to the calls path.
+    it("repurposes a local number to the calls purpose (and leaves the nickname untouched)", async () => {
       const { service, prisma } = setup();
       prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(makeNumber({ phoneNumberE164: "+61255501234" }));
 
       await service.setNickname(NUMBER_ID, undefined, TENANT_ID, "transactional");
 
       expect(prisma.telephonyPhoneNumber.update).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: NUMBER_ID }, data: { purpose: "transactional" } }),
+        expect.objectContaining({ where: { id: NUMBER_ID }, data: { purpose: "voice" } }),
       );
     });
   });

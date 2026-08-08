@@ -5,6 +5,7 @@ import { CredentialCryptoService } from "../integrations/credential-crypto.servi
 import { FeatureFlagsService } from "../common/flags/feature-flags.service";
 import type { ResolvedSender } from "../twilio/twilio.service";
 import { isVoiceNumber } from "./phone-capabilities";
+import { isVoicePurpose } from "./number-purpose";
 
 export type SendPurpose = "transactional" | "marketing" | "whatsapp";
 
@@ -179,7 +180,12 @@ export class TelephonySenderResolver {
       ? numbers.find((n) => n.campaignId === ctx.campaignId)
       : undefined;
     const tenantDefaults = numbers.filter((n) => n.campaignId == null);
-    const purposeMatched = tenantDefaults.find((n) => n.purpose === ctx.purpose);
+    // A voice resolution must also match rows stamped with the legacy "transactional" spelling
+    // (isVoicePurpose accepts both) – a raw string compare left legacy-purposed numbers losing
+    // the deliberate-purpose tiebreak to arbitrary array order.
+    const purposeMatched = tenantDefaults.find((n) =>
+      ctx.purpose === "voice" ? isVoicePurpose(n.purpose) : n.purpose === ctx.purpose,
+    );
     const number = campaignScoped ?? purposeMatched ?? tenantDefaults[0];
     if (!number) return undefined;
 

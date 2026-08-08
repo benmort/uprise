@@ -1078,8 +1078,12 @@ export const telephony = {
       headers: { "Content-Type": "application/json" },
     }),
 
-  /** Repurpose a number ("transactional" = the calls number; +614 is refused server-side). */
-  setPurpose: (numberId: string, purpose: "transactional" | "marketing" | "whatsapp") =>
+  /**
+   * Repurpose a number. `"voice"` is the calls number — the value provisioning stamps and the
+   * sender resolver matches; `"transactional"` is the legacy alias the API still folds into it.
+   * A +614 mobile is refused server-side.
+   */
+  setPurpose: (numberId: string, purpose: "voice" | "transactional" | "marketing" | "whatsapp") =>
     request<TelephonyPhoneNumber>(`/telephony/numbers/${encodeURIComponent(numberId)}`, {
       method: "PATCH",
       body: JSON.stringify({ purpose }),

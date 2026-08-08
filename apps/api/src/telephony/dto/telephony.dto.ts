@@ -11,6 +11,7 @@ import {
   MaxLength,
   ValidateNested,
 } from "class-validator";
+import { NUMBER_PURPOSES } from "../number-purpose";
 
 /** Trim a pasted string; anything else is left alone for the validator to reject. */
 const trimmed = ({ value }: TransformFnParams) => (typeof value === "string" ? value.trim() : value);
@@ -162,10 +163,22 @@ export class SetNumberNicknameDto {
   @MaxLength(80)
   nickname?: string;
 
-  /** Which sends this number serves ("transactional" = calls, "marketing" = SMS blasts). */
+  /**
+   * Which sends this number serves: "voice" = calls, "marketing" = SMS blasts, "whatsapp".
+   *
+   * "voice" is the value the platform actually stamps at provisioning
+   * (`purpose: numberType === "local" ? "voice" : "marketing"`) and the only one
+   * TelephonySenderResolver matches for a call (`ctx.purpose === "voice"`). This DTO could
+   * previously only express "transactional", so the calls UI both READ and WROTE a value nothing
+   * else used — a provisioned local number never appeared as the calls number, and picking one in
+   * the UI wrote a purpose the resolver ignored.
+   *
+   * "transactional" is still accepted as the legacy alias for existing rows and older clients;
+   * `normalisePurpose` folds it into "voice".
+   */
   @IsOptional()
-  @IsIn(["transactional", "marketing", "whatsapp"])
-  purpose?: "transactional" | "marketing" | "whatsapp";
+  @IsIn([...NUMBER_PURPOSES, "transactional"])
+  purpose?: "voice" | "transactional" | "marketing" | "whatsapp";
 }
 
 /**
