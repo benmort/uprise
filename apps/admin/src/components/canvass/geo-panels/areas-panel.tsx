@@ -18,6 +18,7 @@ import { useTurfBasket } from "@/lib/canvass/turf-basket";
 import { useGeoExplorer } from "@/lib/canvass/geo-explorer-state";
 import { MyTurfPanel } from "@/components/canvass/my-turf-panel";
 import { SelectedAreasEstimate } from "@/components/canvass/selected-areas-estimate";
+import { areaSearchMinChars } from "@/lib/canvass/area-limits";
 import { STATE_ABBREVS, stateAbbrevToAsgsDigit } from "@/lib/canvass/states";
 import { UniverseCards, UniverseSelect } from "@/components/canvass/universe-select";
 import { useGeoExplorerUrlState } from "@/components/canvass/use-geo-explorer-url-state";
@@ -103,7 +104,7 @@ export function AreasPanel({ view }: { view: WalkMode }) {
   const [saving, setSaving] = useState(false);
 
   const trimmed = q.trim();
-  const minChars = level === "mb" || level === "sa1" ? 3 : 2;
+  const minChars = areaSearchMinChars(level);
   const effectiveQ = trimmed.length >= minChars ? trimmed : "";
 
   useEffect(() => {

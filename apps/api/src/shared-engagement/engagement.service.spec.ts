@@ -84,6 +84,47 @@ describe("EngagementService", () => {
       const emitted = outbox.append.mock.calls.map((c: any[]) => c[1].eventType);
       expect(emitted).toEqual(expect.arrayContaining(["canvass.disposition.set", "canvass.survey.answered"]));
     });
+
+    it("reads the option and the question together, not one after the other", async () => {
+      const order: string[] = [];
+      let releaseOption: (() => void) | undefined;
+      prisma.questionOption.findUnique.mockImplementation(async () => {
+        order.push("option:start");
+        await new Promise<void>((resolve) => {
+          releaseOption = resolve;
+        });
+        order.push("option:end");
+        return { id: "opt1", dispositionCode: null };
+      });
+      prisma.question.findUnique.mockImplementation(async () => {
+        // The question read starts while the option read is still outstanding – only true
+        // if the two were issued together rather than awaited in series.
+        order.push("question:start");
+        releaseOption?.();
+        return { surveyId: "sv1" };
+      });
+
+      await service.recordSurveyAnswer("org_1", {
+        contactId: "c1",
+        questionId: "q1",
+        optionId: "opt1",
+        channel: EngagementChannel.DOOR,
+      });
+
+      expect(order).toEqual(["option:start", "question:start", "option:end"]);
+    });
+
+    it("skips the option read entirely for a free-text answer", async () => {
+      await service.recordSurveyAnswer("org_1", {
+        contactId: "c1",
+        questionId: "q1",
+        valueText: "Housing",
+        channel: EngagementChannel.DOOR,
+      });
+
+      expect(prisma.questionOption.findUnique).not.toHaveBeenCalled();
+      expect(prisma.disposition.create).not.toHaveBeenCalled();
+    });
   });
 
   describe("recordDisposition", () => {

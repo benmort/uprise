@@ -475,7 +475,7 @@ export default function DashboardPage() {
             </p>
             <p className="text-xs text-muted-foreground">
               {(dialler?.data?.active ?? 0).toLocaleString()} active ·{" "}
-              {dialler?.data?.connectRate == null ? "no" : `${dialler.data.connectRate}%`} connect rate ·{" "}
+              {dialler?.data?.connectRate == null ? "no" : `${dialler.data.connectRate}%`} connect rate (90d) ·{" "}
               {(dialler?.data?.transfers ?? 0).toLocaleString()} transfers
             </p>
           </div>

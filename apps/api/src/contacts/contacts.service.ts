@@ -23,15 +23,23 @@ export class ContactsService {
    * Resolve (or create) the single Contact for an org + normalised phone.
    * The (org, phoneE164) uniqueness is a partial index Prisma can't target with
    * upsert(), so we find-then-create and treat a P2002 as a concurrent insert.
+   *
+   * `primed` lets a caller that has already read a batch of contacts (the integration
+   * importer reads a whole sync page in one query) hand this row's spine straight in,
+   * skipping the lookup. It only replaces the FIND – the enrich still runs, so a primed
+   * call behaves identically to an unprimed one.
    */
   async getOrCreateByPhone(
     tenantId: string,
     phoneE164: string,
     seed?: ContactSeed,
+    primed?: Contact | null,
   ): Promise<Contact> {
-    const existing = await this.prisma.contact.findFirst({
-      where: { tenantId, phoneE164 },
-    });
+    const existing =
+      primed ??
+      (await this.prisma.contact.findFirst({
+        where: { tenantId, phoneE164 },
+      }));
     if (existing) return this.enrich(existing, seed);
 
     try {
@@ -46,6 +54,76 @@ export class ContactsService {
       if (raced) return this.enrich(raced, seed);
       throw error;
     }
+  }
+
+  /**
+   * Batch counterpart of {@link getOrCreateByPhone} – resolve many phones in a fixed
+   * number of queries instead of one round trip (or three) per phone. Returns
+   * phone → contact id for every phone that resolved.
+   *
+   * Same contract as the single-row version, so a bulk import behaves like the
+   * row-at-a-time path it replaces: an existing contact is reused and
+   * non-destructively enriched from its seed, a missing one is created.
+   * `createMany({ skipDuplicates })` compiles to `ON CONFLICT DO NOTHING` with no
+   * conflict target, which the (tenantId, phoneE164) PARTIAL unique index still
+   * catches – so a concurrent writer racing us is absorbed rather than throwing,
+   * and the re-read picks up whichever row won.
+   *
+   * Duplicate phones in `seeds` collapse to one contact, last seed winning.
+   */
+  async getOrCreateManyByPhone(
+    tenantId: string,
+    seeds: Array<{ phoneE164: string; seed?: ContactSeed }>,
+  ): Promise<Map<string, string>> {
+    const wanted = new Map<string, ContactSeed | undefined>();
+    for (const s of seeds) wanted.set(s.phoneE164, s.seed);
+    const byPhone = new Map<string, string>();
+    const phones = [...wanted.keys()];
+    if (phones.length === 0) return byPhone;
+
+    const existing = await this.prisma.contact.findMany({
+      where: { tenantId, phoneE164: { in: phones } },
+      select: {
+        id: true,
+        phoneE164: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        address: true,
+        lat: true,
+        lng: true,
+      },
+    });
+    for (const c of existing) if (c.phoneE164) byPhone.set(c.phoneE164, c.id);
+
+    const missing = phones.filter((p) => !byPhone.has(p));
+    if (missing.length > 0) {
+      await this.prisma.contact.createMany({
+        data: missing.map((phoneE164) => ({
+          tenantId,
+          phoneE164,
+          ...this.seedData(wanted.get(phoneE164)),
+        })),
+        skipDuplicates: true,
+      });
+      const created = await this.prisma.contact.findMany({
+        where: { tenantId, phoneE164: { in: missing } },
+        select: { id: true, phoneE164: true },
+      });
+      for (const c of created) if (c.phoneE164) byPhone.set(c.phoneE164, c.id);
+    }
+
+    // The same blank-field back-fill enrich() does per row. Only the contacts that
+    // actually have a gap the seed can fill are written, so the steady state – an
+    // already-named contact – costs nothing.
+    const fills = existing
+      .map((c) => ({ id: c.id, data: this.enrichData(c, wanted.get(c.phoneE164 ?? "")) }))
+      .filter((f) => Object.keys(f.data).length > 0);
+    await Promise.all(
+      fills.map((f) => this.prisma.contact.update({ where: { id: f.id }, data: f.data })),
+    );
+
+    return byPhone;
   }
 
   /**
@@ -514,9 +592,12 @@ export class ContactsService {
     return data;
   }
 
-  /** Fill only blank fields on an existing contact from the seed (non-destructive). */
-  private async enrich(contact: Contact, seed?: ContactSeed): Promise<Contact> {
-    if (!seed) return contact;
+  /** The non-destructive diff enrich() applies: only blank fields the seed can fill. */
+  private enrichData(
+    contact: Pick<Contact, "firstName" | "lastName" | "email" | "address" | "lat" | "lng">,
+    seed?: ContactSeed,
+  ): Prisma.ContactUpdateInput {
+    if (!seed) return {};
     const { firstName, lastName } = this.resolveName(seed);
     const data: Prisma.ContactUpdateInput = {};
     if (!contact.firstName && firstName) data.firstName = firstName;
@@ -525,6 +606,12 @@ export class ContactsService {
     if (!contact.address && seed.address) data.address = seed.address;
     if (contact.lat == null && seed.lat != null) data.lat = seed.lat;
     if (contact.lng == null && seed.lng != null) data.lng = seed.lng;
+    return data;
+  }
+
+  /** Fill only blank fields on an existing contact from the seed (non-destructive). */
+  private async enrich(contact: Contact, seed?: ContactSeed): Promise<Contact> {
+    const data = this.enrichData(contact, seed);
     if (Object.keys(data).length === 0) return contact;
     return this.prisma.contact.update({ where: { id: contact.id }, data });
   }

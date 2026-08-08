@@ -60,6 +60,12 @@ const DOORKNOCK = { action: "manage", resource: "canvass.doorknock" } as const;
 const SHIFT_READ = { action: "read", resource: "canvass.shift" } as const;
 const SHIFT_MANAGE = { action: "manage", resource: "canvass.shift" } as const;
 
+/** QA paging off the query string. Both params are optional and both are validated in the
+ *  service, so an omitted or junk `take` lands as undefined and takes the default page. */
+function qaPage(cursor?: string, take?: string) {
+  return { cursor: cursor || undefined, take: take === undefined ? undefined : Number(take) };
+}
+
 @Controller("canvass")
 @UseGuards(RolesGuard)
 export class CanvassingController {
@@ -550,14 +556,23 @@ export class CanvassingController {
   // Tenant-wide aggregate (the "All campaigns" QA view). Declared before the `:id` variant.
   @Get("campaigns/qa")
   @Roles(AppUserRole.ORGANISER)
-  async qaReviewAll(@TenantId() tenantId: string) {
-    return this.canvassing.qaReview(tenantId);
+  async qaReviewAll(
+    @TenantId() tenantId: string,
+    @Query("cursor") cursor?: string,
+    @Query("take") take?: string,
+  ) {
+    return this.canvassing.qaReview(tenantId, undefined, qaPage(cursor, take));
   }
 
   @Get("campaigns/:id/qa")
   @Roles(AppUserRole.ORGANISER)
-  async qaReview(@Param("id") id: string, @TenantId() tenantId: string) {
-    return this.canvassing.qaReview(tenantId, id);
+  async qaReview(
+    @Param("id") id: string,
+    @TenantId() tenantId: string,
+    @Query("cursor") cursor?: string,
+    @Query("take") take?: string,
+  ) {
+    return this.canvassing.qaReview(tenantId, id, qaPage(cursor, take));
   }
 
   @Post("campaigns/:id/qa/resolve")

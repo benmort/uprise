@@ -20,6 +20,7 @@ import {
 import { getArea, searchAreas, type AreaHit, type AreaLevel } from "@/lib/api/geo";
 import { getApiUrl } from "@/lib/api";
 import { ensureNoDataHatch, NODATA_HATCH_ID, NODATA_OUTLINE_PAINT } from "@/lib/canvass/nodata-hatch";
+import { areaMinZoom, areaSearchMinChars } from "@/lib/canvass/area-limits";
 import { useTheme } from "@/components/theme/theme-provider";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
@@ -53,12 +54,14 @@ const LEVELS: Array<{ id: AreaLevel; label: string }> = [
 
 // Boundaries load as Mapbox Vector Tiles (GET /geo/tiles), so mapbox only requests
 // the tiles visible at the current zoom — fast at any zoom, no "zoom in" wall. The
-// one exception is meshblocks (368k nationally): only request their tiles once
-// zoomed in enough that a tile's row count stays bounded. Every coarser level has
-// no floor. `maxzoom` caps tile generation and overzooms finer detail from there.
-const MB_MIN_ZOOM = 9;
+// exceptions are the dense levels (368k meshblocks / 61k SA1s nationally): only
+// request their tiles once zoomed in enough that a tile's row count stays bounded.
+// The floors are `areaMinZoom`, kept in lockstep with the API's TILE_MIN_ZOOM – below
+// them the server answers 204, so an unfloored source would just render nothing.
+// `maxzoom` caps tile generation and overzooms finer detail from there.
 const TILE_MAX_ZOOM = 16;
-const sourceMinZoom = (lvl: AreaLevel) => (lvl === "mb" ? MB_MIN_ZOOM : 0);
+/** What the "zoom in" banner names – the level whose tiles the floor is holding back. */
+const zoomInLabel = (lvl: AreaLevel) => (lvl === "mb" ? "meshblocks" : `${lvl.toUpperCase()} boundaries`);
 // Brand primary for boundary overlays (mapbox paint needs a literal hex).
 const PRIMARY = "#465fff";
 
@@ -586,7 +589,7 @@ export function TurfDrawMap({
   const syncViewport = useCallback(() => {
     const map = mapRef.current?.getMap();
     if (!map) return;
-    setTooZoomedOut(level === "mb" && map.getZoom() < MB_MIN_ZOOM);
+    setTooZoomedOut(map.getZoom() < areaMinZoom(level));
     let rendered: Array<{ properties: Record<string, unknown> | null }> = [];
     try {
       rendered = map.queryRenderedFeatures({ layers: ["areas-fill"] }) as never;
@@ -657,9 +660,13 @@ export function TurfDrawMap({
   );
   const activeStop = stops.find((s) => s.id === activeStopId);
 
+  // Shortest term the API will actually search this level for – below it /geo/areas/search
+  // returns [] by design, so firing the request would only ever blank the dropdown.
+  const areaMinChars = searchMode === "area" ? areaSearchMinChars(level) : 2;
+
   const runSearch = useCallback(async () => {
     const q = query.trim();
-    if (q.length < 2) return;
+    if (q.length < areaMinChars) return;
     setSearching(true);
     try {
       if (searchMode === "area") {
@@ -678,7 +685,7 @@ export function TurfDrawMap({
     } finally {
       setSearching(false);
     }
-  }, [query, searchMode, level]);
+  }, [query, searchMode, level, areaMinChars]);
 
   const pickHit = useCallback(
     async (hit: { label: string; code?: string; lat: number; lng: number; bbox?: [number, number, number, number] }) => {
@@ -703,17 +710,17 @@ export function TurfDrawMap({
     [searchMode, level, onToggleArea],
   );
 
-  // Area mode is a combobox: typing (≥2 chars) live-searches the level's full
-  // national set; an empty query falls back to the in-view areas (below).
+  // Area mode is a combobox: typing (≥ areaMinChars) live-searches the level's full
+  // national set; a shorter query falls back to the in-view areas (below).
   useEffect(() => {
     if (searchMode !== "area") return;
-    if (query.trim().length < 2) {
+    if (query.trim().length < areaMinChars) {
       setHits([]);
       return;
     }
     const t = setTimeout(() => void runSearch(), 250);
     return () => clearTimeout(t);
-  }, [query, searchMode, level, runSearch]);
+  }, [query, searchMode, level, areaMinChars, runSearch]);
 
   // What the area dropdown shows: search hits when typing, else the active
   // level's areas currently on the map (scrollable). Capped for DOM sanity.
@@ -723,8 +730,8 @@ export function TurfDrawMap({
     [viewportHits],
   );
 
-  const areaOptions = query.trim().length >= 2 ? hits : viewportAreas;
-  const areaListTruncated = query.trim().length < 2 && viewportAreas.length > AREA_LIST_CAP;
+  const areaOptions = query.trim().length >= areaMinChars ? hits : viewportAreas;
+  const areaListTruncated = query.trim().length < areaMinChars && viewportAreas.length > AREA_LIST_CAP;
   const displayList = searchMode === "area" ? (areaOpen ? areaOptions.slice(0, AREA_LIST_CAP) : []) : hits;
 
   // Surface the in-view areas (+ zoomed-out flag) so a consumer can render a
@@ -812,7 +819,7 @@ export function TurfDrawMap({
             </li>
           ) : null}
         </ul>
-      ) : searchMode === "area" && areaOpen && query.trim().length < 2 ? (
+      ) : searchMode === "area" && areaOpen && query.trim().length < areaMinChars ? (
         <div className="absolute left-0 top-full z-20 mt-1 w-72 rounded-lg border border-border bg-surface px-2 py-1.5 text-[11px] text-muted-foreground shadow-card">
           {tooZoomedOut
             ? `Zoom in to list ${level.toUpperCase()} areas, or type to search.`
@@ -996,7 +1003,7 @@ export function TurfDrawMap({
                 id="areas"
                 type="vector"
                 tiles={[tileUrl]}
-                minzoom={sourceMinZoom(level)}
+                minzoom={areaMinZoom(level)}
                 maxzoom={TILE_MAX_ZOOM}
               >
                 <Layer id="areas-fill" source-layer="areas" type="fill" filter={areaFilter} paint={{ "fill-color": "#2563eb", "fill-opacity": 0.06 }} />
@@ -1298,7 +1305,7 @@ export function TurfDrawMap({
                   </p>
                 ) : tooZoomedOut ? (
                   <p className="rounded-lg bg-warning-container px-2.5 py-1.5 text-[11px] font-medium text-warning-foreground">
-                    Zoom in to load meshblocks.
+                    Zoom in to load {zoomInLabel(level)}.
                   </p>
                 ) : null}
               </>,
@@ -1406,7 +1413,7 @@ export function TurfDrawMap({
                   </li>
                 ) : null}
               </ul>
-            ) : searchMode === "area" && areaOpen && query.trim().length < 2 ? (
+            ) : searchMode === "area" && areaOpen && query.trim().length < areaMinChars ? (
               <div className="border-t border-border px-2 py-1.5 text-[11px] text-muted-foreground">
                 {tooZoomedOut
                   ? `Zoom in to list ${level.toUpperCase()} areas, or type to search.`
@@ -1422,7 +1429,7 @@ export function TurfDrawMap({
             </p>
           ) : tooZoomedOut ? (
             <p className="rounded-lg bg-warning-container px-2.5 py-1.5 text-[11px] font-medium text-warning-foreground shadow-card">
-              Zoom in to load meshblocks.
+              Zoom in to load {zoomInLabel(level)}.
             </p>
           ) : null}
         </div>

@@ -72,6 +72,8 @@ describe("IntegrationsService — sync queue", () => {
         update: jest.fn().mockResolvedValue({}),
       },
       audienceContact: { upsert: jest.fn().mockResolvedValue({}) },
+      // The page's spine prime: one read of the contacts that already exist.
+      contact: { findMany: jest.fn().mockResolvedValue([]) },
       integrationConnection: {
         // The tenant's own active connection. requestSyncList resolves through this —
         // there is no env fallback and nothing is auto-created, so a test that wants a
@@ -256,6 +258,74 @@ describe("IntegrationsService — sync queue", () => {
     expect(result.stats.reasonCounts.invalid_phone_format).toBe(1);
   });
 
+  it("pools the page but still accounts for a poison row, and keeps every good one", async () => {
+    const { service, prisma, contacts } = build();
+    const rows = Array.from({ length: 50 }, (_, i) =>
+      contactableRow({ externalId: `an:${i}`, phone: `+6140000${String(i).padStart(4, "0")}` }),
+    );
+    (service as any).actionNetwork.syncList.mockResolvedValueOnce({
+      contacts: rows,
+      stats: stats({ returnedContacts: 50, processedItems: 50 }),
+    });
+    // One row blows up inside the pool. Its neighbours must be unaffected: the per-row
+    // try/catch still owns the failure, it is still classified, and the page continues.
+    prisma.audienceContact.upsert.mockImplementation(async ({ create }: any) =>
+      create.externalId === "an:17" ? Promise.reject(new Error("db exploded")) : {},
+    );
+
+    const result: any = await service.processSyncQueueJob(payload);
+
+    expect(result.syncedCount).toBe(49);
+    expect(result.failedCount).toBe(1);
+    expect(result.stats.failedPersist).toBe(1);
+    expect(result.stats.reasonCounts.persistence_error).toBe(1);
+    expect(result.stats.sampleErrors).toContain("Error: db exploded");
+    expect(prisma.audienceContact.upsert).toHaveBeenCalledTimes(50);
+    expect(contacts.getOrCreateByPhone).toHaveBeenCalledTimes(50);
+  });
+
+  it("primes the contact spines for the page in one read and hands each row its own", async () => {
+    const { service, prisma, contacts } = build();
+    (service as any).actionNetwork.syncList.mockResolvedValueOnce({
+      contacts: [contactableRow(), contactableRow({ externalId: "an:2", phone: "+61400000001" })],
+      stats: stats({ returnedContacts: 2, processedItems: 2 }),
+    });
+    const spine = { id: "cExisting", phoneE164: "+61400000000" };
+    prisma.contact.findMany.mockResolvedValue([spine]);
+
+    await service.processSyncQueueJob(payload);
+
+    expect(prisma.contact.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.contact.findMany).toHaveBeenCalledWith({
+      where: { tenantId: "org1", phoneE164: { in: ["+61400000000", "+61400000001"] } },
+    });
+    // The known person arrives pre-resolved; the unknown one falls through to the lookup.
+    expect(contacts.getOrCreateByPhone).toHaveBeenCalledWith("org1", "+61400000000", expect.anything(), spine);
+    expect(contacts.getOrCreateByPhone).toHaveBeenCalledWith("org1", "+61400000001", expect.anything(), undefined);
+  });
+
+  it("keeps rows that share a phone in order rather than racing them", async () => {
+    const { service, prisma } = build();
+    (service as any).actionNetwork.syncList.mockResolvedValueOnce({
+      contacts: [
+        contactableRow({ externalId: "an:1", name: "First" }),
+        contactableRow({ externalId: "an:2", name: "Second" }),
+      ],
+      stats: stats({ returnedContacts: 2, processedItems: 2 }),
+    });
+    const seen: string[] = [];
+    prisma.audienceContact.upsert.mockImplementation(async ({ create }: any) => {
+      seen.push(create.externalId);
+      return {};
+    });
+
+    await service.processSyncQueueJob(payload);
+
+    // Two people on one phone number: the audience row is unique on it, so they must not
+    // be in flight together – the pool runs them as one serial group.
+    expect(seen).toEqual(["an:1", "an:2"]);
+  });
+
   it("reuses an already-stamped audienceId instead of creating a new audience", async () => {
     const { service, prisma, tx } = build({ job: baseJob({ audienceId: "audX" }) });
     (service as any).actionNetwork.syncList.mockResolvedValueOnce({
@@ -402,6 +472,23 @@ describe("IntegrationsService — sync queue", () => {
     expect(prisma.integrationSyncJob.findMany.mock.calls[0][0]).toMatchObject({ take: 1 });
     expect(prisma.integrationSyncJob.findMany.mock.calls[1][0]).toMatchObject({ take: 100 });
     expect(prisma.integrationSyncJob.findMany.mock.calls[2][0]).toMatchObject({ take: 20 });
+  });
+
+  it("getSyncJobs keeps the badge fields and leaves the JSON blobs on the server", async () => {
+    const { service, prisma } = build();
+    await service.getSyncJobs("org1");
+    const { select } = prisma.integrationSyncJob.findMany.mock.calls[0][0];
+    // Everything the audiences page renders a sync badge from.
+    for (const field of [
+      "id", "audienceId", "status", "remoteListId",
+      "syncedCount", "failedCount", "errorSummary",
+      "startedAt", "completedAt", "createdAt",
+    ]) {
+      expect(select[field]).toBe(true);
+    }
+    // …and neither of the JSON documents nobody reads.
+    expect(select.checkpoint).toBeUndefined();
+    expect(select.query).toBeUndefined();
   });
 
   // ── NationBuilder pull extras (tags, email-only people, opt-out mirror) ─────

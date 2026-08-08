@@ -43,6 +43,22 @@ export type TurfUniverse = "existing" | "none" | "hybrid";
 /** Outcome of (re)building a turf's canonical walk list. */
 type ReconcileResult = { turfId: string; walkListId: string | null; items: number; added: number; removed: number };
 
+/** A turf contact enriched with its G-NAF address row (see `turfContacts`). */
+type TurfContactRow = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  /** The contact's G-NAF address id (null for non-cold contacts) – lets the walk-list
+   *  preview's door popover fetch the address detail (regions, nearest polling). */
+  gnafPid: string | null;
+  address: string | null;
+  street: string | null;
+  locality: string | null;
+  postcode: string | null;
+  lat: number | null;
+  lng: number | null;
+};
+
 const SUPPORT_LEVELS: SupportLevel[] = [
   SupportLevel.STRONG_SUPPORT,
   SupportLevel.LEAN_SUPPORT,
@@ -65,6 +81,16 @@ const SPOKE_TO_CODES = ["spoke_to_target", "spoke_to_other"];
  *  chokes well before the desktop limit. A boundary with more areas than this is one to cut
  *  at a coarser level, which the screen says rather than silently dropping the tail. */
 const SELF_SERVE_AREA_LIMIT = 1200;
+
+/** How far back the QA review looks. A knock older than this is history an organiser can no
+ *  longer act on, and the unbounded scan it replaces grew with every knock the tenant ever
+ *  recorded. */
+const QA_REVIEW_WINDOW_DAYS = 30;
+/** Knocks scanned per QA page, and the ceiling a caller may ask for. Cadence is judged
+ *  against the previous knock, so the first row of a page has no predecessor to compare
+ *  against – pages want to be big enough that the seam is rare. */
+const QA_REVIEW_DEFAULT_TAKE = 2000;
+const QA_REVIEW_MAX_TAKE = 5000;
 
 export type SurveyAnswerInput = {
   questionId: string;
@@ -206,7 +232,10 @@ export class CanvassingService {
       turf: {
         include: {
           walkLists: {
-            select: { id: true, name: true, items: { select: { status: true } } },
+            // Counts, never items: the total rides the relation count and pending/visited
+            // come from ONE grouped count below – per-item hydration (up to ~2000 rows per
+            // turf) was the dominant boot cost even with statuses alone.
+            select: { id: true, name: true, _count: { select: { items: true } } },
           },
           // The campaign's self-serve flag gates the homepage "Get more turf" link.
           campaign: { select: { volunteerCanSelfClaimTurf: true } },
@@ -230,6 +259,24 @@ export class CanvassingService {
     if (missing.length > 0) {
       await Promise.all(missing.map((a) => this.rebuildTurfWalkList(tenantId, a.turf.id).catch(() => undefined)));
       assignments = await load();
+    }
+
+    // Pending/visited per walk list, pushed down to one grouped count across every
+    // assigned turf's lists.
+    const walkListIds = assignments.flatMap((a) => a.turf.walkLists.map((w) => w.id));
+    const statusCounts = walkListIds.length
+      ? await this.prisma.walkListItem.groupBy({
+          by: ["walkListId", "status"],
+          where: { walkListId: { in: walkListIds } },
+          _count: { _all: true },
+        })
+      : [];
+    const countsByList = new Map<string, { pending: number; visited: number }>();
+    for (const row of statusCounts) {
+      const cur = countsByList.get(row.walkListId) ?? { pending: 0, visited: 0 };
+      if (row.status === WalkListItemStatus.PENDING) cur.pending += row._count._all;
+      else if (row.status === WalkListItemStatus.VISITED) cur.visited += row._count._all;
+      countsByList.set(row.walkListId, cur);
     }
 
     // Which of these turfs' campaigns actually have shifts — gates the homepage "Pick a shift"
@@ -267,10 +314,14 @@ export class CanvassingService {
         doorsPerHour: a.turf.estimate?.doorsPerHour ?? null,
       },
       walkLists: a.turf.walkLists.map((w) => {
-        const total = w.items.length;
-        const pending = w.items.filter((i) => i.status === WalkListItemStatus.PENDING).length;
-        const visited = w.items.filter((i) => i.status === WalkListItemStatus.VISITED).length;
-        return { id: w.id, name: w.name, total, pending, visited };
+        const counts = countsByList.get(w.id);
+        return {
+          id: w.id,
+          name: w.name,
+          total: w._count.items,
+          pending: counts?.pending ?? 0,
+          visited: counts?.visited ?? 0,
+        };
       }),
     }));
   }
@@ -815,7 +866,15 @@ export class CanvassingService {
    * backfilled coords still gets a map pin. Cross-schema, hence `$queryRaw`.
    */
   async listTurfContacts(tenantId: string, turfId: string) {
-    return this.prisma.$queryRaw`
+    return this.turfContacts(tenantId, [turfId]);
+  }
+
+  /** The enriched turf-contact read, over one or many turfs. Rows come back grouped by turf
+   *  in the order the ids were given, then by `createdAt` within a turf – the same order a
+   *  per-turf loop produced, so the multi-turf callers are a straight substitution. */
+  private turfContacts(tenantId: string, turfIds: string[]): Promise<TurfContactRow[]> {
+    if (turfIds.length === 0) return Promise.resolve([]);
+    return this.prisma.$queryRaw<TurfContactRow[]>(Prisma.sql`
       SELECT c.id,
              c."firstName" AS "firstName",
              c."lastName"  AS "lastName",
@@ -828,24 +887,9 @@ export class CanvassingService {
              COALESCE(c.lng, a.lng) AS lng
         FROM "public"."Contact" c
         LEFT JOIN geo.gnaf_address a ON a.gnaf_pid = c."gnafPid"
-       WHERE c."tenantId" = ${tenantId} AND c."turfId" = ${turfId}
-       ORDER BY c."createdAt" ASC
-    ` as Promise<
-      Array<{
-        id: string;
-        firstName: string | null;
-        lastName: string | null;
-        /** The contact's G-NAF address id (null for non-cold contacts) — lets the walk-list
-         *  preview's door popover fetch the address detail (regions, nearest polling). */
-        gnafPid: string | null;
-        address: string | null;
-        street: string | null;
-        locality: string | null;
-        postcode: string | null;
-        lat: number | null;
-        lng: number | null;
-      }>
-    >;
+       WHERE c."tenantId" = ${tenantId} AND c."turfId" = ANY(${turfIds}::text[])
+       ORDER BY array_position(${turfIds}::text[], c."turfId"), c."createdAt" ASC
+    `);
   }
 
   /**
@@ -980,14 +1024,11 @@ export class CanvassingService {
     if (!lock || lock.volunteerId !== volunteerId) {
       throw new ApiHttpException("TURF_NOT_ASSIGNED", "This turf is not assigned to you");
     }
-    const items = await this.prisma.walkListItem.findMany({
-      where: { walkList: { turfId } },
-      select: { id: true },
-    });
-    const itemIds = items.map((i) => i.id);
-    if (itemIds.length === 0) return [];
+    // Scope by the knock's CONTACT rather than by a prefetched walk-list-item id list: the
+    // old shape read every item id on the turf (~2000) just to build an IN-list. The turf
+    // lives on the contact, so the relation filter does the same job in the one query.
     const knocks = await this.prisma.doorKnock.findMany({
-      where: { tenantId, volunteerId, walkListItemId: { in: itemIds } },
+      where: { tenantId, volunteerId, contact: { tenantId, turfId } },
       orderBy: { createdAt: "asc" },
       select: {
         walkListItemId: true,
@@ -1020,16 +1061,39 @@ export class CanvassingService {
       include: {
         assignments: { where: { status: TurfAssignmentStatus.ASSIGNED }, include: { volunteer: true } },
         _count: { select: { contacts: true, walkLists: true } },
-        walkLists: { select: { items: { select: { status: true } } } },
+        // Walk-list IDS only – the stop totals come from the ONE grouped count below.
+        // Hydrating every item's status here meant up to ~2000 rows per turf times every
+        // turf on the organiser's list, all to produce two integers per row.
+        walkLists: { select: { id: true } },
         // The cached doors/hour estimate. Null until the turf has been priced; `source`
         // says whether the walk came from Mapbox footpaths or from straight lines.
         estimate: true,
       },
     });
+    const turfIds = turfs.map((t) => t.id);
+    const statusCounts = turfIds.length
+      ? await this.prisma.walkListItem.groupBy({
+          by: ["walkListId", "status"],
+          where: { walkList: { turfId: { in: turfIds } } },
+          _count: { _all: true },
+        })
+      : [];
+    // walkListId → turfId, so the grouped rows fold back onto their turf in memory.
+    const turfOfList = new Map<string, string>();
+    for (const t of turfs) for (const w of t.walkLists) turfOfList.set(w.id, t.id);
+    const stopsByTurf = new Map<string, { total: number; visited: number }>();
+    for (const row of statusCounts) {
+      const ofTurf = turfOfList.get(row.walkListId);
+      if (!ofTurf) continue;
+      const cur = stopsByTurf.get(ofTurf) ?? { total: 0, visited: 0 };
+      cur.total += row._count._all;
+      if (row.status === WalkListItemStatus.VISITED) cur.visited += row._count._all;
+      stopsByTurf.set(ofTurf, cur);
+    }
     return turfs.map((t) => {
-      const items = t.walkLists.flatMap((w) => w.items);
-      const totalStops = items.length;
-      const visitedStops = items.filter((i) => i.status === WalkListItemStatus.VISITED).length;
+      const stops = stopsByTurf.get(t.id);
+      const totalStops = stops?.total ?? 0;
+      const visitedStops = stops?.visited ?? 0;
       return {
         id: t.id,
         name: t.name,
@@ -1746,14 +1810,15 @@ export class CanvassingService {
   }
 
   /** Every contact across the turfs a volunteer currently holds in a campaign — the
-   *  "view all their contacts" drill-through. Reuses listTurfContacts per held turf. */
+   *  "view all their contacts" drill-through. */
   async listVolunteerContacts(tenantId: string, campaignId: string, volunteerId: string) {
     const held = await this.prisma.turfAssignment.findMany({
       where: { volunteerId, status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId, campaignId } },
       select: { turfId: true },
     });
-    const perTurf = await Promise.all(held.map((h) => this.listTurfContacts(tenantId, h.turfId)));
-    return perTurf.flat();
+    // One join over every held turf rather than a per-turf query inside Promise.all: a
+    // volunteer holding a dozen turfs was a dozen round trips for the same projection.
+    return this.turfContacts(tenantId, held.map((h) => h.turfId));
   }
 
   async createWalkList(
@@ -2263,18 +2328,31 @@ export class CanvassingService {
 
   // ── QA review (G10): flag suspicious knocks ─────────────────────
   /** Knocks that look suspect: too-fast cadence or missing GPS. Read-only heuristic.
-   *  Tenant-wide when no campaign id (the "All campaigns" view). */
-  async qaReview(tenantId: string, campaignId?: string) {
+   *  Tenant-wide when no campaign id (the "All campaigns" view).
+   *
+   *  Bounded on both axes: only the last QA_REVIEW_WINDOW_DAYS days are scanned, one page
+   *  at a time. `nextCursor` is the last knock of a full page – pass it back as `cursor` to
+   *  continue; null means the tail. The NO_GPS / FAST_CADENCE heuristic itself is unchanged. */
+  async qaReview(tenantId: string, campaignId?: string, opts?: { cursor?: string; take?: number }) {
     const turfs = await this.prisma.turf.findMany({
       where: { tenantId, ...(campaignId ? { campaignId } : {}) },
       select: { id: true },
     });
     const turfIds = turfs.map((t) => t.id);
-    if (turfIds.length === 0) return { flags: [] };
+    if (turfIds.length === 0) return { flags: [], nextCursor: null as string | null };
 
+    // A garbage or absent `take` falls back to the default rather than reaching Prisma as NaN.
+    const requested = Number(opts?.take);
+    const take =
+      Number.isFinite(requested) && requested > 0
+        ? Math.min(Math.trunc(requested), QA_REVIEW_MAX_TAKE)
+        : QA_REVIEW_DEFAULT_TAKE;
+    const since = new Date(Date.now() - QA_REVIEW_WINDOW_DAYS * 24 * 60 * 60 * 1000);
     const knocks = await this.prisma.doorKnock.findMany({
-      where: { tenantId, contact: { turfId: { in: turfIds } } },
+      where: { tenantId, createdAt: { gte: since }, contact: { turfId: { in: turfIds } } },
       orderBy: [{ volunteerId: "asc" }, { createdAt: "asc" }],
+      take,
+      ...(opts?.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
       include: { volunteer: { select: { displayName: true } } },
     });
 
@@ -2288,7 +2366,18 @@ export class CanvassingService {
       resolved: boolean;
       state: string | null;
     }> = [];
+    // Cadence is a comparison against the preceding knock, so a paged read would lose the
+    // flag on every page's first row. The cursor row IS that predecessor (the read skips it),
+    // so seeding `prev` from it makes the seam invisible – page 2 flags exactly what an
+    // unpaged scan would. Tenant-scoped because the cursor is caller-supplied.
     let prev: { volunteerId: string | null; at: Date } | null = null;
+    if (opts?.cursor) {
+      const anchor = await this.prisma.doorKnock.findFirst({
+        where: { id: opts.cursor, tenantId },
+        select: { volunteerId: true, createdAt: true },
+      });
+      if (anchor) prev = { volunteerId: anchor.volunteerId, at: anchor.createdAt };
+    }
     for (const k of knocks) {
       if (k.lat == null || k.lng == null) {
         flags.push({
@@ -2333,7 +2422,9 @@ export class CanvassingService {
         f.state = state;
       }
     }
-    return { flags };
+    // A short page is the tail; a full one may not be, so hand back where to resume.
+    const nextCursor = knocks.length === take ? (knocks[knocks.length - 1]?.id ?? null) : null;
+    return { flags, nextCursor };
   }
 
   /** Record (or clear) an organiser's action on a computed QA flag. */
@@ -2379,7 +2470,6 @@ export class CanvassingService {
       orderBy: { createdAt: "desc" },
       include: {
         _count: { select: { items: true } },
-        items: { where: { status: WalkListItemStatus.VISITED }, select: { id: true } },
         turf: {
           select: {
             id: true,
@@ -2392,6 +2482,17 @@ export class CanvassingService {
         },
       },
     });
+    // Visited stops as a grouped count, not a page of item ids. Prisma keys `_count` by
+    // relation name, so the total and the VISITED subset can't both ride the include –
+    // the total stays on `_count.items` and the filtered half comes from here.
+    const visitedCounts = walkLists.length
+      ? await this.prisma.walkListItem.groupBy({
+          by: ["walkListId"],
+          where: { walkListId: { in: walkLists.map((w) => w.id) }, status: WalkListItemStatus.VISITED },
+          _count: { _all: true },
+        })
+      : [];
+    const visitedByList = new Map(visitedCounts.map((r) => [r.walkListId, r._count._all]));
     return walkLists.map((w) => {
       const lock = w.turf?.assignments[0];
       return {
@@ -2401,7 +2502,7 @@ export class CanvassingService {
         campaignId: w.campaignId,
         listType: w.listType,
         stopCount: w._count.items,
-        visitedCount: w.items.length,
+        visitedCount: visitedByList.get(w.id) ?? 0,
         assignedTo: lock
           ? {
               volunteerId: lock.volunteerId,

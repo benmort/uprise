@@ -12,6 +12,8 @@ const DEFAULT_MODEL: AiChatModel = "claude-opus-4-8";
 const MAX_TOKENS = 4096;
 /** Context window cap — prior turns beyond this are dropped oldest-first. */
 const MAX_CONTEXT_MESSAGES = 40;
+/** Conversations returned by one sidebar page (callers may ask for up to 100). */
+const CONVERSATION_PAGE = 50;
 const TITLE_MAX = 60;
 
 export interface AiChatResult {
@@ -54,12 +56,17 @@ export class AiService {
           select: { id: true },
         });
 
+    // Only the tail is ever used, so ask for the tail: read newest-first with a `take` and
+    // turn it back the right way round. Slicing in JS meant a long conversation loaded every
+    // turn it has ever had – the whole history, to throw all but forty rows away.
     const prior = await this.prisma.aiMessage.findMany({
       where: { conversationId: conversation.id },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "desc" },
+      take: MAX_CONTEXT_MESSAGES,
       select: { role: true, content: true },
     });
-    const context = prior.slice(-MAX_CONTEXT_MESSAGES).map((m) => ({
+    prior.reverse();
+    const context = prior.map((m) => ({
       role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
       content: m.content,
     }));
@@ -116,13 +123,24 @@ export class AiService {
     };
   }
 
-  async listConversations(userId: string) {
+  /**
+   * The conversation sidebar, newest first. Bounded and cursor-paged: unpaged, a heavy user's
+   * first render fetched every chat they had ever started. `nextCursor` is the last row's id
+   * when the page came back full, and null when there is nothing after it.
+   */
+  async listConversations(userId: string, opts: { limit?: number; cursor?: string } = {}) {
+    const take = Math.min(Math.max(1, opts.limit ?? CONVERSATION_PAGE), 100);
     const rows = await this.prisma.aiConversation.findMany({
       where: { userId },
       orderBy: { updatedAt: "desc" },
+      take,
+      ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
       select: { id: true, title: true, model: true, updatedAt: true, createdAt: true },
     });
-    return { conversations: rows };
+    return {
+      conversations: rows,
+      nextCursor: rows.length === take ? (rows[rows.length - 1]?.id ?? null) : null,
+    };
   }
 
   async getConversation(userId: string, id: string) {

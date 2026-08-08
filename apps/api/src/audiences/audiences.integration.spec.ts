@@ -32,6 +32,7 @@ describe("AudiencesService integration-like flow", () => {
       audienceContact: {
         upsert: jest.fn().mockResolvedValue({}),
       },
+      $executeRaw: jest.fn().mockResolvedValue(1),
       audienceImport: {
         create: jest.fn().mockImplementation(async ({ data }: any) => {
           Object.assign(job, data);
@@ -70,14 +71,13 @@ describe("AudiencesService integration-like flow", () => {
     expect(resumed.status).toBe(AudienceImportStatus.SUCCEEDED);
     expect(resumed.cursor).toBe(2);
     expect(resumed.importedRows).toBe(2);
-    expect(prismaMock.audienceContact.upsert).toHaveBeenCalledTimes(2);
-    for (const [callArg] of prismaMock.audienceContact.upsert.mock.calls) {
-      expect(callArg.create.metadata).toEqual(
-        expect.objectContaining({
-          contactable: true,
-        }),
-      );
-      expect(callArg.update.metadata).toEqual(
+    // One set write per batch (batch size 1 here), not one upsert per row.
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(2);
+    expect(prismaMock.audienceContact.upsert).not.toHaveBeenCalled();
+    for (const [query] of prismaMock.$executeRaw.mock.calls) {
+      // values: tenantId, audienceId, source, ids[], phones[], contactIds[], names[], metadata[]
+      const metadata = query.values[7] as string[];
+      expect(JSON.parse(metadata[0])).toEqual(
         expect.objectContaining({
           contactable: true,
         }),
@@ -115,6 +115,7 @@ describe("AudiencesService integration-like flow", () => {
       audienceContact: {
         upsert: jest.fn().mockResolvedValue({}),
       },
+      $executeRaw: jest.fn().mockResolvedValue(1),
       audienceImport: {
         findMany: jest.fn().mockResolvedValue([{ id: "import_2", audienceId: "aud_1" }]),
         findFirst: jest.fn().mockResolvedValue(job),

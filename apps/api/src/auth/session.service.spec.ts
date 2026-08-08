@@ -262,8 +262,76 @@ describe("SessionService", () => {
       id: "s1", userId: "u1", token: "t", tenantId: null, expiresAt: new Date(Date.now() + 60_000),
     });
     prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c", deletedAt: new Date() });
+    prisma.tenantMember.findMany.mockResolvedValue([{ tenantId: "t1", role: "ORGANISER" }]);
     const svc = new SessionService(prisma);
     await expect(svc.resolve("t")).resolves.toBeNull();
+  });
+
+  // The hottest path in the API: the user row and the membership list are independent (both keyed
+  // off session.userId), so the principal build must issue them CONCURRENTLY. A sequential build
+  // (await user, then await memberships) deadlocks this test – the user fetch only resolves once
+  // the membership fetch is also in flight – and times out.
+  it("resolve() fetches the user and the memberships concurrently off one session read", async () => {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue({
+      id: "s1", userId: "u1", token: "t", tenantId: null, expiresAt: new Date(Date.now() + 60_000),
+    });
+    let membershipsRequested = false;
+    prisma.user.findUnique.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          const tick = () =>
+            membershipsRequested ? resolve({ id: "u1", email: "a@b.c" }) : setImmediate(tick);
+          tick();
+        }),
+    );
+    prisma.tenantMember.findMany.mockImplementation(async () => {
+      membershipsRequested = true;
+      return [{ tenantId: "t1", role: "ORGANISER" }];
+    });
+    const svc = new SessionService(prisma);
+    // Result parity: the concurrent build returns the same principal the sequential one did.
+    await expect(svc.resolve("t")).resolves.toEqual({
+      userId: "u1",
+      email: "a@b.c",
+      tenantId: "t1",
+      role: "ORGANISER",
+      isSuperAdmin: false,
+    });
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
+    expect(prisma.tenantMember.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolve() selects only the fields the principal (and the last-seen stamp) uses", async () => {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue({
+      id: "s1", userId: "u1", token: "t", tenantId: null, expiresAt: new Date(Date.now() + 60_000),
+      userAgent: null, ipAddress: null,
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c" });
+    prisma.tenantMember.findMany.mockResolvedValue([{ tenantId: "t1", role: "ORGANISER" }]);
+    const svc = new SessionService(prisma);
+    await svc.resolve("t");
+    expect(prisma.session.findUnique).toHaveBeenCalledWith({
+      where: { token: "t" },
+      select: {
+        id: true,
+        userId: true,
+        tenantId: true,
+        expiresAt: true,
+        userAgent: true,
+        ipAddress: true,
+      },
+    });
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      select: { id: true, email: true, deletedAt: true, isSuperAdmin: true },
+    });
+    expect(prisma.tenantMember.findMany).toHaveBeenCalledWith({
+      where: { userId: "u1" },
+      orderBy: { createdAt: "asc" },
+      select: { tenantId: true, role: true },
+    });
   });
 });
 

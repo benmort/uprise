@@ -45,7 +45,7 @@ function setup(opts: { matched: string[]; policyPass?: string[]; compliancePass?
       return { resolved, clauseErrors: [] };
     }),
   };
-  return { svc: new SegmentPreviewService(prisma, leafResolver), universe };
+  return { svc: new SegmentPreviewService(prisma, leafResolver), universe, leafResolver };
 }
 
 describe("SegmentPreviewService", () => {
@@ -86,6 +86,32 @@ describe("SegmentPreviewService", () => {
     const preview = await svc.preview("t1", { filter: FILTER, policy: DEFAULT_SEGMENT_POLICY });
     expect(preview.shaped).toBe(preview.matched);
     expect(preview.excludedByPolicy).toBe(0);
+  });
+
+  it("reads the contact universe once per preview, across all three layer folds", async () => {
+    const policy: SegmentPolicy = {
+      fatigue: { enabled: true, windowHours: 72, maxSends: 3 },
+      isActive: { enabled: false, predicate: DEFAULT_SEGMENT_POLICY.isActive.predicate },
+    };
+    const { svc, leafResolver, universe } = setup({
+      matched: ["c1", "c2", "c3", "c4"],
+      policyPass: ["c1", "c2", "c3"],
+      compliancePass: ["c1", "c2"],
+    });
+
+    const preview = await svc.preview("t1", { filter: FILTER, policy });
+
+    expect(leafResolver.universe).toHaveBeenCalledTimes(1);
+    // `total`, the leaf resolution and every prefix fold all read that one set.
+    expect(preview.total).toBe(universe.size);
+    expect(leafResolver.resolveLeaves.mock.calls[0][2]).toBe(universe);
+  });
+
+  it("does not carry a universe between previews", async () => {
+    const { svc, leafResolver } = setup({ matched: ["c1"], compliancePass: ["c1"] });
+    await svc.preview("t1", { filter: FILTER, policy: DEFAULT_SEGMENT_POLICY });
+    await svc.preview("t1", { filter: FILTER, policy: DEFAULT_SEGMENT_POLICY });
+    expect(leafResolver.universe).toHaveBeenCalledTimes(2);
   });
 });
 

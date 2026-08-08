@@ -101,6 +101,8 @@ const TWILIO_DELIVERY_FAILED_STATUSES = new Set(["failed", "undelivered"]);
 const SKIPPED_DUPLICATE_ERROR =
   "Skipped duplicate recipient: message already sent for this blast.";
 const BLAST_DRY_RUN_SID_PREFIX = "DRYRUN";
+/** Rows per createMany when seeding recipient records. */
+const RECIPIENT_SEED_CHUNK_SIZE = 1000;
 
 type RecipientTraceInput = {
   status: BlastRecipientStatus;
@@ -608,42 +610,42 @@ export class BlastsService {
     if (existingCount > 0) return existingCount;
 
     const recipients = await this.getBlastRecipients(blast);
-    let skippedDuplicates = 0;
-    for (const recipient of recipients) {
+    const rows: Prisma.BlastRecipientCreateManyInput[] = recipients.map((recipient) => {
       const context = recipient.metadata;
       const normalizedPhone = normalizePhoneE164(recipient.phoneE164);
       const renderedBody = this.renderer.render(blast.bodyTemplate, context);
       const compliance = this.compliance.validateMessageForSend(renderedBody);
-      const recipientMetadata = this.appendRecipientTrace(
-        {
-          complianceWarnings: compliance.warnings,
-          context,
-        } as Prisma.InputJsonValue,
-        {
-          status: BlastRecipientStatus.PENDING,
-          source: "seed",
-          reason: "Recipient seeded from audience",
-        },
-      );
-      try {
-        await this.prisma.blastRecipient.create({
-          data: {
-            blastId: blast.id,
-            contactId: recipient.contactId,
-            phoneE164: normalizedPhone,
-            renderedBody,
+      return {
+        blastId: blast.id,
+        contactId: recipient.contactId,
+        phoneE164: normalizedPhone,
+        renderedBody,
+        status: BlastRecipientStatus.PENDING,
+        metadata: this.appendRecipientTrace(
+          {
+            complianceWarnings: compliance.warnings,
+            context,
+          } as Prisma.InputJsonValue,
+          {
             status: BlastRecipientStatus.PENDING,
-            metadata: recipientMetadata,
+            source: "seed",
+            reason: "Recipient seeded from audience",
           },
-        });
-      } catch (error) {
-        if (!this.isBlastRecipientUniqueConflict(error)) throw error;
-        skippedDuplicates += 1;
-        this.logger.warn(
-          `Skipping duplicate recipient record during blast seed (blastId=${blast.id}, phoneE164=${normalizedPhone}, contactId=${recipient.contactId ?? "n/a"})`,
-        );
-      }
+        ),
+      };
+    });
+    // Chunked createMany replaces the old per-row create loop; skipDuplicates
+    // reproduces the per-row P2002 swallow on @@unique([blastId, phoneE164]).
+    let created = 0;
+    for (let offset = 0; offset < rows.length; offset += RECIPIENT_SEED_CHUNK_SIZE) {
+      const chunk = rows.slice(offset, offset + RECIPIENT_SEED_CHUNK_SIZE);
+      const result = await this.prisma.blastRecipient.createMany({
+        data: chunk,
+        skipDuplicates: true,
+      });
+      created += result.count;
     }
+    const skippedDuplicates = rows.length - created;
     if (skippedDuplicates > 0) {
       this.logger.warn(
         `Skipped duplicate recipient records during blast seed (blastId=${blast.id}, skipped=${skippedDuplicates})`,
@@ -695,17 +697,6 @@ export class BlastsService {
     return base as Prisma.InputJsonValue;
   }
 
-  private isBlastRecipientUniqueConflict(error: unknown): boolean {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
-    if (error.code !== "P2002") return false;
-    const rawTarget = error.meta?.target;
-    const target = Array.isArray(rawTarget) ? rawTarget.join(",") : String(rawTarget ?? "");
-    return (
-      (target.includes("blastId") && target.includes("phoneE164")) ||
-      target.includes("BlastRecipient_blastId_phoneE164_key")
-    );
-  }
-
   private async writeSnapshot(orgId: string, blastId: string, metricName: string, value: number) {
     await this.prisma.analyticsSnapshot.create({
       data: {
@@ -732,15 +723,40 @@ export class BlastsService {
       throw new NotFoundException("Blast not found");
     }
 
-    const [remaining, failedRecipients] = await Promise.all([
+    // Internal-failure total = a DB count of the rows the INTERNAL_ prefix decides
+    // outright, plus a residual fetch of only the rows the prefix cannot decide
+    // (null category, or matching neither prefix exactly – e.g. odd casing), which
+    // still classify via scopeFromStoredFailure. Replaces loading every FAILED row.
+    const [remaining, internalPrefixCount, residualFailures] = await Promise.all([
       this.prisma.blastRecipient.count({
         where: {
           blastId,
           status: { in: [BlastRecipientStatus.PENDING, BlastRecipientStatus.QUEUED] },
         },
       }),
+      this.prisma.blastRecipient.count({
+        where: {
+          blastId,
+          status: BlastRecipientStatus.FAILED,
+          failureCategory: { startsWith: "INTERNAL_" },
+        },
+      }),
       this.prisma.blastRecipient.findMany({
-        where: { blastId, status: BlastRecipientStatus.FAILED },
+        where: {
+          blastId,
+          status: BlastRecipientStatus.FAILED,
+          OR: [
+            { failureCategory: null },
+            {
+              NOT: {
+                OR: [
+                  { failureCategory: { startsWith: "INTERNAL_" } },
+                  { failureCategory: { startsWith: "EXTERNAL_" } },
+                ],
+              },
+            },
+          ],
+        },
         select: {
           failureCategory: true,
           errorCode: true,
@@ -749,9 +765,11 @@ export class BlastsService {
       }),
     ]);
 
-    const internalFailures = failedRecipients.reduce((count, recipient) => {
-      return count + (this.isRecipientFailureInternal(recipient) ? 1 : 0);
-    }, 0);
+    const internalFailures =
+      internalPrefixCount +
+      residualFailures.reduce((count, recipient) => {
+        return count + (this.isRecipientFailureInternal(recipient) ? 1 : 0);
+      }, 0);
 
     const status =
       remaining > 0
@@ -1081,14 +1099,23 @@ export class BlastsService {
     let skippedDuplicates = 0;
     const startedAtMs = Date.now();
     const runBudgetMs = this.getSendTimeBudgetMs();
-    const sentRecipients = await this.prisma.blastRecipient.findMany({
-      where: {
-        blastId: blast.id,
-        status: { in: SENT_RECIPIENT_STATUSES },
-      },
-      select: { phoneE164: true },
-      distinct: ["phoneE164"],
-    });
+    // Duplicate guard scoped to THIS batch's phones (not every sent recipient of the
+    // blast); in-batch duplicates are still caught by sentPhones.add() in the loop.
+    const pendingBatchPhones = Array.from(
+      new Set(pendingRecipients.map((recipient) => recipient.phoneE164)),
+    );
+    const sentRecipients =
+      pendingBatchPhones.length === 0
+        ? []
+        : await this.prisma.blastRecipient.findMany({
+            where: {
+              blastId: blast.id,
+              phoneE164: { in: pendingBatchPhones },
+              status: { in: SENT_RECIPIENT_STATUSES },
+            },
+            select: { phoneE164: true },
+            distinct: ["phoneE164"],
+          });
     const sentPhones = new Set(sentRecipients.map((recipient) => recipient.phoneE164));
     const dryRunEnabled = await this.isBlastDryRunEnabled();
     if (dryRunEnabled && pendingRecipients.length > 0) {
@@ -1491,8 +1518,14 @@ export class BlastsService {
 
   async retryFailed(id: string, _fromQueue = false) {
     const blast = await this.getBlastOrThrow(id);
+    // One bounded batch per invocation (no auto-re-enqueue), mirroring sendNow's
+    // batch size + wall-clock budget so a huge failure set can't blow the run.
+    const batchSize = this.getSendBatchSize();
     const failedRecipients = await this.prisma.blastRecipient.findMany({
       where: { blastId: id, status: BlastRecipientStatus.FAILED },
+      select: { id: true, phoneE164: true, renderedBody: true, metadata: true },
+      orderBy: { createdAt: "asc" },
+      take: batchSize,
     });
     const dryRunEnabled = await this.isBlastDryRunEnabled();
     if (dryRunEnabled && failedRecipients.length > 0) {
@@ -1501,7 +1534,16 @@ export class BlastsService {
       );
     }
     let retried = 0;
+    const startedAtMs = Date.now();
+    const runBudgetMs = this.getSendTimeBudgetMs();
     for (const recipient of failedRecipients) {
+      const elapsedMs = Date.now() - startedAtMs;
+      if (elapsedMs >= runBudgetMs) {
+        this.logger.warn(
+          `Stopping blast retry batch early due to runtime budget (blastId=${blast.id}, elapsedMs=${elapsedMs}, budgetMs=${runBudgetMs})`,
+        );
+        break;
+      }
       try {
         const sendOptions = await this.sendOptionsFor(
           blast,

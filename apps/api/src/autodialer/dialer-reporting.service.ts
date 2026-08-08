@@ -53,6 +53,15 @@ export type DialerResults = {
 
 const DECIDED_OUTCOMES = ["ANSWERED", "MACHINE", "NO_ANSWER", "BUSY", "FAILED", "OPTED_OUT"];
 
+/**
+ * Rolling window for the tenant-wide connect rate. Unbounded, the groupBy
+ * scanned every DialerAttempt the tenant had ever made – growing without
+ * limit and pinned to no index. Bounded, it rides `(tenantId, createdAt)`
+ * and reports a live rate rather than an all-time average that a long-dead
+ * campaign keeps dragging around.
+ */
+const DIALER_STATS_WINDOW_DAYS = 90;
+
 @Injectable()
 export class DialerReportingService {
   constructor(private readonly prisma: PrismaService) {}
@@ -64,6 +73,7 @@ export class DialerReportingService {
   }
 
   async tenantStats(tenantId: string, now: Date = new Date()): Promise<DialerTenantStats> {
+    const statsSince = new Date(now.getTime() - DIALER_STATS_WINDOW_DAYS * 86_400_000);
     const [active, callsToday, outcomes, transfers] = await Promise.all([
       this.prisma.dialerCampaign.count({
         where: { tenantId, status: DialerCampaignStatus.ACTIVE },
@@ -73,7 +83,7 @@ export class DialerReportingService {
       }),
       this.prisma.dialerAttempt.groupBy({
         by: ["outcome"],
-        where: { tenantId },
+        where: { tenantId, createdAt: { gte: statsSince } },
         _count: { _all: true },
       }),
       this.prisma.dialerRedirect.count({ where: { tenantId } }),
@@ -103,11 +113,15 @@ export class DialerReportingService {
         this.prisma.dialerAttempt.count({
           where: { campaignId, createdAt: { gte: this.startOfToday(now) } },
         }),
-        this.prisma.dialerRedirect.count({ where: { campaignId } }),
+        // tenantId is redundant for correctness (the campaign was just proved
+        // to belong to the tenant) but it is the leading column of the
+        // (tenantId, campaignId, createdAt) indexes on DialerRedirect and
+        // DialerCallSession – without it these counts cannot use them.
+        this.prisma.dialerRedirect.count({ where: { tenantId, campaignId } }),
         this.prisma.dialerSurveyResult.count({ where: { campaignId } }),
-        this.prisma.dialerCallSession.count({ where: { campaignId } }),
+        this.prisma.dialerCallSession.count({ where: { tenantId, campaignId } }),
         this.prisma.dialerCallSession.count({
-          where: { campaignId, status: { in: ["BRIDGED", "ENDED"] } },
+          where: { tenantId, campaignId, status: { in: ["BRIDGED", "ENDED"] } },
         }),
       ]);
 
@@ -178,9 +192,11 @@ export class DialerReportingService {
         where: { campaignId },
         _count: { _all: true },
       }),
-      this.prisma.dialerRedirect.count({ where: { campaignId } }),
+      // Leading-column tenantId again – the (tenantId, campaignId, createdAt)
+      // index also gives the transfer ledger its ordering for free.
+      this.prisma.dialerRedirect.count({ where: { tenantId, campaignId } }),
       this.prisma.dialerRedirect.findMany({
-        where: { campaignId },
+        where: { tenantId, campaignId },
         orderBy: { createdAt: "desc" },
         take: 100,
         select: {

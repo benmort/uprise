@@ -140,11 +140,11 @@ export class SessionService {
   /**
    * Is this token a live session? One indexed lookup, nothing else.
    *
-   * `resolve` costs three sequential queries — session, user, memberships — plus a last-seen
-   * write, because it builds a full principal with a role and an active tenant. Routes that serve
-   * static reference data need none of that: they need to know the caller is signed in. Paying
-   * 3× for an answer you discard is how a map's tile burst drained the connection pool and 500'd
-   * 22 requests in eight seconds.
+   * `resolve` costs two round-trips – the session, then the user + memberships in parallel – plus
+   * a last-seen write, because it builds a full principal with a role and an active tenant. Routes
+   * that serve static reference data need none of that: they need to know the caller is signed in.
+   * Paying for a principal you discard is how a map's tile burst drained the connection pool and
+   * 500'd 22 requests in eight seconds.
    *
    * Deliberately returns no role and no tenant, so it cannot accidentally satisfy a `@Roles` or
    * `@RequirePermission` gate — a route using this must genuinely need neither.
@@ -204,15 +204,40 @@ export class SessionService {
     return value;
   }
 
-  /** The real principal build — three queries and a last-seen stamp. Wrapped by `resolve`. */
+  /** The real principal build – two round-trips and a last-seen stamp. Wrapped by `resolve`. */
   private async resolveUncached(
     token: string,
     meta?: { userAgent?: string | null; ipAddress?: string | null },
     opts?: { forcedTenantId?: string | null },
   ): Promise<ResolvedSession | null> {
-    const session = await this.prisma.session.findUnique({ where: { token } });
+    const session = await this.prisma.session.findUnique({
+      where: { token },
+      // Exactly what the principal build + the last-seen stamp below read off the row.
+      select: {
+        id: true,
+        userId: true,
+        tenantId: true,
+        expiresAt: true,
+        userAgent: true,
+        ipAddress: true,
+      },
+    });
     if (!session || session.expiresAt.getTime() <= Date.now()) return null;
-    const user = await this.prisma.user.findUnique({ where: { id: session.userId } });
+    // The user row and the membership list are both keyed off session.userId and independent of
+    // each other – fetch them together, so the hottest path in the API pays one round-trip here,
+    // not two. The soft-delete guard stays in-memory below, exactly as before. Selects are narrow:
+    // exactly the fields the principal (and the stamp above) uses.
+    const [user, memberships] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: session.userId },
+        select: { id: true, email: true, deletedAt: true, isSuperAdmin: true },
+      }),
+      this.prisma.tenantMember.findMany({
+        where: { userId: session.userId },
+        orderBy: { createdAt: "asc" },
+        select: { tenantId: true, role: true },
+      }),
+    ]);
     if (!user || user.deletedAt) return null;
     // Stamp device info + last-seen on activity, best-effort. The user agent is
     // first-write (it identifies the device the session was minted on); the IP
@@ -227,10 +252,6 @@ export class SessionService {
         },
       })
       .catch(() => undefined);
-    const memberships = await this.prisma.tenantMember.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
     // A super-admin may have zero memberships (break-glass) and may operate inside a
     // tenant they're not a member of — so they resolve even when a normal user wouldn't.
     if (memberships.length === 0 && !user.isSuperAdmin) return null;

@@ -13,7 +13,11 @@ import { DomainLogger } from "../common/logging/domain-logger.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { InsightsService } from "../insights/insights.service";
 import { LegacyClauseEvaluator } from "./legacy-clause-evaluator";
-import { SegmentLeafResolverService } from "./segment-leaf-resolver.service";
+import {
+  memoiseUniverse,
+  SegmentLeafResolverService,
+  type ContactUniverse,
+} from "./segment-leaf-resolver.service";
 
 /**
  * Dynamic-segment evaluator (meld doc 10) — the format ROUTER. Resolves which
@@ -61,6 +65,14 @@ export class SegmentEvaluatorService {
     });
     if (!segment) throw new NotFoundException(`Segment ${segmentId} not found`);
 
+    // ONE contact universe per evaluation, loaded lazily and shared by whichever
+    // format branch runs (and, in the legacy branch, by every `all` clause in it).
+    const universe = memoiseUniverse(() =>
+      this.leafResolver
+        ? this.leafResolver.universe(segment.tenantId)
+        : this.legacy.allContactIds(segment.tenantId),
+    );
+
     const isV2 = detectDefinitionFormat(segment.definition) === "v2";
     const contactIds = isV2
       ? Array.from(
@@ -68,9 +80,12 @@ export class SegmentEvaluatorService {
             segment.tenantId,
             segment.definition,
             segment.audience?.channel,
+            universe,
           ),
         )
-      : Array.from(await this.legacy.resolveMemberIds(segment.tenantId, segment.definition));
+      : Array.from(
+          await this.legacy.resolveMemberIds(segment.tenantId, segment.definition, universe),
+        );
 
     await this.prisma.$transaction(async (tx) => {
       await tx.audienceSegmentMember.deleteMany({ where: { segmentId } });
@@ -115,7 +130,8 @@ export class SegmentEvaluatorService {
   private async resolveV2MemberIds(
     tenantId: string,
     definition: unknown,
-    audienceChannel?: string | null,
+    audienceChannel: string | null | undefined,
+    loadUniverse: ContactUniverse,
   ): Promise<Set<string>> {
     if (!this.leafResolver) {
       throw new Error("SegmentLeafResolverService unavailable — cannot evaluate a v2 segment");
@@ -130,7 +146,7 @@ export class SegmentEvaluatorService {
       "blast",
       { channel },
     );
-    const universe = await this.leafResolver.universe(tenantId);
+    const universe = await loadUniverse();
     const { resolved } = await this.leafResolver.resolveLeaves(
       tenantId,
       collectEffectiveLeaves(composed.tree),

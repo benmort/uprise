@@ -23,6 +23,14 @@ const PHONE_LOGIN_TTL_MS = 5 * 60 * 1000;
 const PHONE_SEND_WINDOW_MS = 15 * 60 * 1000;
 const PHONE_MAX_SENDS_PER_WINDOW = 3;
 const MAX_OTP_ATTEMPTS = 5;
+// The open-join preview is public + pre-session (allowlisted), so a shared link or a crawler can
+// hammer it with no auth in the way. Memoise the whole payload briefly – 30 s of staleness on a
+// landing page's brand + social-proof counts is cheap, and nothing here authorises joining.
+const OPEN_JOIN_PREVIEW_TTL_MS = 30_000;
+/** Bound on the preview memo – only real campaigns are cached, but never grow without limit. */
+const OPEN_JOIN_PREVIEW_MAX = 500;
+/** Bound on the super Signups queue – a review surface, not an export; the 200 newest is plenty. */
+const PENDING_SIGNUPS_MAX = 200;
 
 /** Throws unless `raw` is a valid E.164 number; returns the trimmed value. */
 function assertE164(raw: string): string {
@@ -92,6 +100,25 @@ export interface SessionGrant {
   memberships: Membership[];
 }
 
+/** The public `/volunteer/[campaignId]` landing payload – see {@link IamFlowsService.openJoinPreview}.
+ *  Structurally mirrors OpenJoinPreview in @uprise/contracts (the api doesn't depend on it); named
+ *  here rather than inline so the memoised value has a type to hold. */
+export interface OpenJoinPreview {
+  channel: string;
+  campaignId: string;
+  open: boolean;
+  tenantId: string;
+  tenantSlug: string | null;
+  campaignName: string;
+  tenantName: string;
+  logoUrl: string | null;
+  primaryColour: string | null;
+  secondaryColour: string | null;
+  customCss: string | null;
+  volunteerCount: number;
+  doorsThisWeek: number;
+}
+
 /** A new-workspace signup awaiting super-admin approval — the super Signups queue row.
  *  Structurally mirrors PendingSignup in @uprise/contracts (the api doesn't depend on it). */
 export interface PendingSignup {
@@ -146,6 +173,9 @@ function signupAttributionOf(input: SignupAttribution, fallback: string) {
 
 @Injectable()
 export class IamFlowsService {
+  /** campaignId → memoised public preview payload; see {@link openJoinPreview}. */
+  private readonly previewMemo = new Map<string, { at: number; value: OpenJoinPreview }>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessions: SessionService,
@@ -1165,21 +1195,12 @@ export class IamFlowsService {
    * as well as open ones. Nothing here authorises joining – `loadOpenCampaign` still gates every
    * write path, so `open: false` cannot be talked past by a crafted client.
    */
-  async openJoinPreview(campaignId: string): Promise<{
-    channel: string;
-    campaignId: string;
-    open: boolean;
-    tenantId: string;
-    tenantSlug: string | null;
-    campaignName: string;
-    tenantName: string;
-    logoUrl: string | null;
-    primaryColour: string | null;
-    secondaryColour: string | null;
-    customCss: string | null;
-    volunteerCount: number;
-    doorsThisWeek: number;
-  }> {
+  async openJoinPreview(campaignId: string): Promise<OpenJoinPreview> {
+    // Short in-process memo (per instance). Only successful payloads are remembered – an unknown
+    // id throws before caching, so a probe can't fill the map with misses.
+    const hit = this.previewMemo.get(campaignId);
+    if (hit && Date.now() - hit.at < OPEN_JOIN_PREVIEW_TTL_MS) return hit.value;
+    if (hit) this.previewMemo.delete(campaignId);
     const campaign = await this.loadCampaignForJoin(campaignId);
     if (!campaign) throw new BadRequestException("This campaign isn't open for sign-ups.");
     const [tenant, profile, stats] = await Promise.all([
@@ -1193,7 +1214,7 @@ export class IamFlowsService {
       // closed page read as a campaign that happened, not a broken link.
       this.campaignJoinStats(campaign.tenantId, campaign.id),
     ]);
-    return {
+    const value: OpenJoinPreview = {
       channel: campaign.channel,
       campaignId: campaign.id,
       open: isOpenForJoin(campaign),
@@ -1207,6 +1228,13 @@ export class IamFlowsService {
       customCss: profile?.customCss ?? null,
       ...stats,
     };
+    if (this.previewMemo.size >= OPEN_JOIN_PREVIEW_MAX) {
+      // Oldest insertion first – Map preserves insertion order, so this drops the stalest.
+      const oldest = this.previewMemo.keys().next().value;
+      if (oldest !== undefined) this.previewMemo.delete(oldest);
+    }
+    this.previewMemo.set(campaignId, { at: Date.now(), value });
+    return value;
   }
 
   /**
@@ -1220,14 +1248,24 @@ export class IamFlowsService {
     campaignId: string,
   ): Promise<{ volunteerCount: number; doorsThisWeek: number }> {
     try {
+      // Resolve the campaign's turf ids once (the [tenantId, campaignId] index), then filter both
+      // stats by id – the nested contact→turf→campaign relation filter made Postgres walk two
+      // joins per count, on a public pre-session route.
+      const turfs = await this.prisma.turf.findMany({
+        where: { tenantId, campaignId },
+        select: { id: true },
+      });
+      if (turfs.length === 0) return { volunteerCount: 0, doorsThisWeek: 0 };
+      const turfIds = turfs.map((t) => t.id);
       const [volunteers, doorsThisWeek] = await Promise.all([
-        this.prisma.turfAssignment.findMany({
-          where: { status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId, campaignId } },
-          select: { volunteerId: true },
-          distinct: ["volunteerId"],
+        // Distinct volunteers via groupBy – findMany+distinct materialised every ASSIGNED
+        // assignment row only to take a .length in JS.
+        this.prisma.turfAssignment.groupBy({
+          by: ["volunteerId"],
+          where: { status: TurfAssignmentStatus.ASSIGNED, turfId: { in: turfIds } },
         }),
         this.prisma.doorKnock.count({
-          where: { tenantId, createdAt: { gte: startOfWeekUtc() }, contact: { turf: { campaignId } } },
+          where: { tenantId, createdAt: { gte: startOfWeekUtc() }, contact: { turfId: { in: turfIds } } },
         }),
       ]);
       return { volunteerCount: volunteers.length, doorsThisWeek };
@@ -1685,6 +1723,9 @@ export class IamFlowsService {
     const rows = await this.prisma.tenantJoinRequest.findMany({
       where: { status: "pending", requestedRole: AppUserRole.OWNER, tenant: { deletedAt: null } },
       orderBy: { createdAt: "desc" },
+      // Bounded: this is a review queue, not an export – an unbounded read here scanned every
+      // pending row; the newest PENDING_SIGNUPS_MAX (200) is far more than a reviewer works.
+      take: PENDING_SIGNUPS_MAX,
       include: { tenant: { select: { name: true, slug: true } } },
     });
     const users = await this.prisma.user.findMany({

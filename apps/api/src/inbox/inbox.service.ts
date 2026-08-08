@@ -64,6 +64,7 @@ export class InboxService {
         OR: [{ blastId: { not: null } }, { recipientId: { not: null } }],
       },
       orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+      select: { blastId: true, recipientId: true },
     });
 
     // The inbound row and its domain event commit atomically (outbox invariant).
@@ -234,16 +235,13 @@ export class InboxService {
       audienceId?: string;
     },
   ) {
-    const [rows, contactsFromMessages, twilioContacts, blastPhones, audiencePhones] = await Promise.all([
+    const [rows, contactsFromMessages, twilioContacts, blastPhones] = await Promise.all([
       this.repo.listConversations(tenantId),
       this.repo.listRecentMessageContacts(tenantId),
       this.twilio.getLatestByContact(500).catch(
         () => ({} as Record<string, { direction: string; date: string; body: string; status: string }>),
       ),
       input?.blastId ? this.repo.listContactPhonesForBlast(tenantId, input.blastId) : Promise.resolve([]),
-      input?.audienceId
-        ? this.repo.listContactPhonesForAudience(tenantId, input.audienceId)
-        : Promise.resolve([]),
     ]);
 
     type ConversationRow = {
@@ -332,6 +330,13 @@ export class InboxService {
       sortedRows = sortedRows.filter((row) => allowed.has(row.contactPhone));
     }
     if (input?.audienceId) {
+      // Membership-test the (bounded) merged page against the audience, rather than
+      // deriving an allow-list from every message row of every blast up front.
+      const audiencePhones = await this.repo.listAudienceMemberPhones(
+        tenantId,
+        input.audienceId,
+        sortedRows.map((row) => row.contactPhone),
+      );
       const allowed = new Set(audiencePhones.map((phone) => normalizePhoneE164(phone)));
       sortedRows = sortedRows.filter((row) => allowed.has(row.contactPhone));
     }

@@ -39,24 +39,30 @@ function setup(over: Partial<Record<string, any>> = {}) {
 describe("listBanks", () => {
   const CAMPAIGNS = [{ id: "c1", name: "VIC SMS", channel: "SMS", status: "ACTIVE" }];
   const BLASTS = [
-    { id: "b1", campaignId: "c1", title: "Wave 1", status: "SENDING", channel: "SMS", metadata: { p2p: true }, createdAt: new Date() },
-    { id: "b2", campaignId: "c1", title: "Auto", status: "SENT", channel: "SMS", metadata: {}, createdAt: new Date() },
+    { id: "b1", campaignId: "c1", title: "Wave 1", status: "SENDING", channel: "SMS", createdAt: new Date() },
   ];
 
-  it("volunteers see only P2P blasts, with counts and WITHOUT live status", async () => {
+  it("volunteers see only P2P blasts (filtered in the query), with counts and WITHOUT live status", async () => {
     const { service, prisma } = setup({ campaigns: CAMPAIGNS, blasts: BLASTS });
     prisma.blastRecipient.groupBy
       .mockResolvedValueOnce([{ blastId: "b1", _count: { _all: 3 } }]) // mine
       .mockResolvedValueOnce([{ blastId: "b1", _count: { _all: 40 } }]); // available
     const banks = await service.listBanks("t1", VOL);
     expect(banks).toHaveLength(1);
-    expect(banks[0].blasts).toHaveLength(1); // the non-P2P blast is not volunteer work
+    expect(banks[0].blasts).toHaveLength(1);
     expect(banks[0].blasts[0]).toMatchObject({ id: "b1", myAssignedUnsent: 3, availableToClaim: 40 });
     expect(banks[0].blasts[0].status).toBeUndefined();
+    // Non-P2P blasts never leave the database: the where carries the same JSON-path
+    // predicate isP2pBlast applies (metadata.p2p === true).
+    expect(prisma.blast.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ metadata: { path: ["p2p"], equals: true } }),
+      }),
+    );
   });
 
   it("organisers see live blast status and banks with no P2P blasts yet", async () => {
-    const { service } = setup({ campaigns: CAMPAIGNS, blasts: [BLASTS[1]] });
+    const { service } = setup({ campaigns: CAMPAIGNS, blasts: [] });
     const banks = await service.listBanks("t1", ORG);
     expect(banks).toHaveLength(1); // empty bank still visible for oversight
     expect(banks[0].blasts).toHaveLength(0);
@@ -113,7 +119,7 @@ describe("myQueue", () => {
       .mockResolvedValueOnce([
         { id: "r1", phoneE164: "+61400000001", renderedBody: "Hi Pat", contactId: "ct1" },
       ]) // toSend
-      .mockResolvedValueOnce([{ phoneE164: "+61400000001" }, { phoneE164: "+61400000002" }]); // bank phones
+      .mockResolvedValueOnce([{ phoneE164: "+61400000002" }]); // in-bank membership matches
     prisma.conversationState.findMany.mockResolvedValueOnce([
       { contactPhone: "+61400000002", unreadCount: 2, lastMessageAt: new Date(), contactId: null },
       { contactPhone: "+61499999999", unreadCount: 1, lastMessageAt: new Date(), contactId: null }, // other bank
@@ -126,6 +132,31 @@ describe("myQueue", () => {
     ]);
     expect(q.conversations).toHaveLength(1); // the foreign-bank conversation is filtered out
     expect(q.conversations[0].contactPhone).toBe("+61400000002");
+    // The conversation read is bounded, and membership is tested per-page phone via
+    // UNIQUE(blastId, phoneE164) – never a blast-wide recipient fetch.
+    expect(prisma.conversationState.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 100 }),
+    );
+    expect(prisma.blastRecipient.findMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { blastId: "b1", phoneE164: { in: ["+61400000002", "+61499999999"] } },
+        select: { phoneE164: true },
+      }),
+    );
+  });
+
+  it("skips the membership query entirely when the caller owns no conversations", async () => {
+    const { service, prisma } = setup({
+      blast: { id: "b1", title: "Wave 1", metadata: { p2p: true } },
+    });
+    prisma.blastRecipient.findMany.mockResolvedValueOnce([]); // toSend
+    prisma.conversationState.findMany.mockResolvedValueOnce([]);
+
+    const q = await service.myQueue("t1", VOL, "b1");
+    expect(q.toSend).toEqual([]);
+    expect(q.conversations).toEqual([]);
+    expect(prisma.blastRecipient.findMany).toHaveBeenCalledTimes(1); // no in-list probe
   });
 });
 

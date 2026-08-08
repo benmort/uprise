@@ -4,16 +4,16 @@ import { ContentService } from "./content.service";
 /** A prisma mock whose $transaction runs the callback against the same mock. */
 function makePrisma(overrides: Record<string, any> = {}) {
   const base: any = {
-    survey: { findFirst: jest.fn(), updateMany: jest.fn() },
-    script: { findFirst: jest.fn(), updateMany: jest.fn() },
-    dispositionSet: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn(), findUnique: jest.fn() },
+    survey: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn() },
+    script: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn() },
+    dispositionSet: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]), create: jest.fn(), update: jest.fn(), findUnique: jest.fn() },
     dispositionSetItem: { findMany: jest.fn(), deleteMany: jest.fn(), create: jest.fn() },
-    cannedSet: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn(), findUnique: jest.fn() },
+    cannedSet: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]), create: jest.fn(), update: jest.fn(), findUnique: jest.fn() },
     cannedSetItem: { findMany: jest.fn(), deleteMany: jest.fn(), create: jest.fn() },
     dispositionDef: { findMany: jest.fn().mockResolvedValue([]) },
     cannedResponse: { findMany: jest.fn().mockResolvedValue([]) },
-    canvassCampaign: { findFirst: jest.fn(), updateMany: jest.fn() },
-    blast: { findFirst: jest.fn() },
+    canvassCampaign: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn() },
+    blast: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
     contentBinding: {
       findFirst: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
@@ -138,12 +138,50 @@ describe("ContentService", () => {
         { id: "b1", objectType: ContentObjectType.CANVASS_CAMPAIGN, objectId: "c1", slot: ContentSlot.PRIMARY },
         { id: "b2", objectType: ContentObjectType.BLAST, objectId: "bl1", slot: ContentSlot.PRIMARY },
       ]);
-      prisma.canvassCampaign.findFirst.mockResolvedValue({ name: "Doorknock" });
-      prisma.blast.findFirst.mockResolvedValue({ title: "Text wave" });
+      prisma.canvassCampaign.findMany.mockResolvedValue([{ id: "c1", name: "Doorknock" }]);
+      prisma.blast.findMany.mockResolvedValue([{ id: "bl1", title: "Text wave" }]);
       const res = await service.usage("org1", ContentType.SURVEY, "s1");
       expect(res.count).toBe(2);
       expect(res.objects[0].objectName).toBe("Doorknock");
       expect(res.objects[1].objectName).toBe("Text wave");
+      // One tenant-scoped query per object TABLE, whatever the binding count.
+      expect(prisma.canvassCampaign.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ["c1"] }, tenantId: "org1" },
+        select: { id: true, name: true },
+      });
+      expect(prisma.blast.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ["bl1"] }, tenantId: "org1" },
+        select: { id: true, title: true },
+      });
+    });
+
+    it("reads one table per object type however many bindings there are", async () => {
+      prisma.contentBinding.findMany.mockResolvedValue([
+        { id: "b1", objectType: ContentObjectType.CANVASS_CAMPAIGN, objectId: "c1", slot: ContentSlot.PRIMARY },
+        { id: "b2", objectType: ContentObjectType.CANVASS_CAMPAIGN, objectId: "c2", slot: ContentSlot.PRIMARY },
+        { id: "b3", objectType: ContentObjectType.CANVASS_CAMPAIGN, objectId: "c3", slot: ContentSlot.PRIMARY },
+      ]);
+      // c2 has been deleted since it was bound, and the rows come back in table order –
+      // a missing row is a null name, and order follows the BINDINGS, not the read.
+      prisma.canvassCampaign.findMany.mockResolvedValue([
+        { id: "c3", name: "Third" },
+        { id: "c1", name: "First" },
+      ]);
+
+      const res = await service.usage("org1", ContentType.SURVEY, "s1");
+
+      expect(res.objects.map((o) => o.objectName)).toEqual(["First", null, "Third"]);
+      expect(prisma.canvassCampaign.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.canvassCampaign.findMany.mock.calls[0][0].where.id.in).toEqual(["c1", "c2", "c3"]);
+      // No blast bindings, so the blast table is never touched.
+      expect(prisma.blast.findMany).not.toHaveBeenCalled();
+    });
+
+    it("reports no objects (and reads nothing) for unbound content", async () => {
+      prisma.contentBinding.findMany.mockResolvedValue([]);
+      expect(await service.usage("org1", ContentType.SCRIPT, "sc1")).toEqual({ count: 0, objects: [] });
+      expect(prisma.canvassCampaign.findMany).not.toHaveBeenCalled();
+      expect(prisma.blast.findMany).not.toHaveBeenCalled();
     });
   });
 
@@ -230,10 +268,58 @@ describe("ContentService", () => {
         { id: "b1", contentType: ContentType.SURVEY, contentId: "s1", slot: ContentSlot.PRIMARY },
         { id: "b2", contentType: ContentType.SCRIPT, contentId: "sc1", slot: ContentSlot.PRIMARY },
       ]);
-      prisma.survey.findFirst.mockResolvedValue({ name: "Persuasion" });
-      prisma.script.findFirst.mockResolvedValue({ name: "Opener" });
+      prisma.survey.findMany.mockResolvedValue([{ id: "s1", name: "Persuasion" }]);
+      prisma.script.findMany.mockResolvedValue([{ id: "sc1", name: "Opener" }]);
       const rows = await service.listBindings("org1", ContentObjectType.CANVASS_CAMPAIGN, "c1");
       expect(rows.map((r) => r.contentName)).toEqual(["Persuasion", "Opener"]);
+      expect(prisma.survey.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ["s1"] }, tenantId: "org1" },
+        select: { id: true, name: true },
+      });
+    });
+
+    it("resolves a mixed, repeated set of bindings with one query per content table", async () => {
+      prisma.contentBinding.findMany.mockResolvedValue([
+        { id: "b1", contentType: ContentType.SURVEY, contentId: "s1", slot: ContentSlot.PRIMARY },
+        { id: "b2", contentType: ContentType.SURVEY, contentId: "s2", slot: ContentSlot.FOLLOW_UP },
+        { id: "b3", contentType: ContentType.SCRIPT, contentId: "sc1", slot: ContentSlot.PRIMARY },
+        { id: "b4", contentType: ContentType.DISPOSITION_SET, contentId: "ds1", slot: ContentSlot.PRIMARY },
+        { id: "b5", contentType: ContentType.CANNED_SET, contentId: "cs1", slot: ContentSlot.PRIMARY },
+        // Same id in a different table: the map must key on type as well as id.
+        { id: "b6", contentType: ContentType.SCRIPT, contentId: "s1", slot: ContentSlot.FOLLOW_UP },
+      ]);
+      prisma.survey.findMany.mockResolvedValue([{ id: "s1", name: "Persuasion" }]); // s2 is gone
+      prisma.script.findMany.mockResolvedValue([
+        { id: "sc1", name: "Opener" },
+        { id: "s1", name: "Script sharing an id" },
+      ]);
+      prisma.dispositionSet.findMany.mockResolvedValue([{ id: "ds1", name: "Door set" }]);
+      prisma.cannedSet.findMany.mockResolvedValue([{ id: "cs1", name: "Replies" }]);
+
+      const rows = await service.listBindings("org1", ContentObjectType.CANVASS_CAMPAIGN, "c1");
+
+      expect(rows.map((r) => r.contentName)).toEqual([
+        "Persuasion",
+        null,
+        "Opener",
+        "Door set",
+        "Replies",
+        "Script sharing an id",
+      ]);
+      // Six bindings, four reads – one per table, never one per binding.
+      expect(prisma.survey.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.script.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.dispositionSet.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.cannedSet.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.survey.findMany.mock.calls[0][0].where.id.in).toEqual(["s1", "s2"]);
+      expect(prisma.script.findMany.mock.calls[0][0].where.id.in).toEqual(["sc1", "s1"]);
+    });
+
+    it("touches no content table when an object has no bindings", async () => {
+      prisma.contentBinding.findMany.mockResolvedValue([]);
+      expect(await service.listBindings("org1", ContentObjectType.BLAST, "bl1")).toEqual([]);
+      expect(prisma.survey.findMany).not.toHaveBeenCalled();
+      expect(prisma.script.findMany).not.toHaveBeenCalled();
     });
 
     it("mirrors + clears the legacy script fields on a primary canvass script bind/unbind", async () => {
