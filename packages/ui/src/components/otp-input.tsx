@@ -39,7 +39,11 @@ const OtpInput = React.forwardRef<HTMLInputElement, OtpInputProps>(
     const emit = (next: string[]) => {
       const joined = next.join("");
       onChange(joined);
-      if (joined.length === length && !joined.includes("")) onComplete?.(joined);
+      // Check the SLOTS for a gap, not the joined string. `"1234".includes("")` is true for every
+      // string in JS, so the old `!joined.includes("")` was always false and `onComplete` could
+      // never fire — every caller's auto-submit was dead code, and people had to press the button
+      // after typing the last digit.
+      if (next.length === length && next.every((d) => d !== "")) onComplete?.(joined);
     };
 
     const setAt = (index: number, digit: string) => {

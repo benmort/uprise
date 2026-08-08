@@ -3,7 +3,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
-    environment: "node",
+    // jsdom so the hooks in this package (use-sync-queue and friends) can be executed at all —
+    // they sit in the coverage-gated layer while a node environment made them untestable.
+    environment: "jsdom",
     // Feeds the repo-wide coverage gate (scripts/coverage-check.mjs). `all: true` forces every
     // source file into the report even with no test, so new untested files read as all-missed.
     coverage: {

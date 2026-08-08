@@ -178,16 +178,30 @@ describe("uploadDoorPhoto — multipart via fetch (not request)", () => {
     expect(res).toEqual({ ok: true, data: { url: "https://cdn/x.jpg" } });
   });
 
-  it("surfaces the server error message on a non-ok response", async () => {
+  // The STATUS rides along, not just the message: the outbox decides retriable-vs-terminal from
+  // it, and re-deriving that from prose discarded a canvasser's queued photo on a 401.
+  it("surfaces the server error message AND the status on a non-ok response", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({ ok: false, status: 500, json: async () => ({ error: { message: "boom" } }) })),
     );
-    expect(await uploadDoorPhoto(file)).toEqual({ ok: false, error: "boom" });
+    expect(await uploadDoorPhoto(file)).toEqual({ ok: false, error: "boom", status: 500 });
   });
 
-  it("returns a failure result on a network error", async () => {
+  it("carries the status on an auth failure, so the outbox retries rather than discards", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 401, json: async () => null })),
+    );
+    expect(await uploadDoorPhoto(file)).toMatchObject({ ok: false, status: 401 });
+  });
+
+  // WebKit says "Load failed" where Chrome says "Failed to fetch"; the flag is what makes the
+  // outbox treat both the same.
+  it("flags a transport failure as networkError, whatever the browser calls it", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
-    expect(await uploadDoorPhoto(file)).toEqual({ ok: false, error: "offline" });
+    expect(await uploadDoorPhoto(file)).toEqual({ ok: false, error: "offline", networkError: true });
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("Load failed"); }));
+    expect(await uploadDoorPhoto(file)).toMatchObject({ networkError: true });
   });
 });

@@ -31,14 +31,38 @@ describe("brandVarsCss", () => {
     expect(css).toContain("--brand-secondary: #123456;");
     // Secondary maps onto --secondary too, with a contrast-picked foreground (dark #123456 → white).
     expect(css).toContain("--secondary: 210 65% 20%;");
-    expect(css).toContain("--secondary-foreground: 0 0% 100%;");
+    expect(css).toContain("--on-secondary: 0 0% 100%;");
     expect(css.startsWith(":root{")).toBe(true);
   });
 
   it("picks dark ink as the secondary foreground for a light brand colour", () => {
     const css = brandVarsCss({ secondaryColour: "#facc15" });
     expect(css).toContain("--secondary: 48 96% 53%;");
-    expect(css).toContain("--secondary-foreground: 222 47% 11%;");
+    expect(css).toContain("--on-secondary: 222 47% 11%;");
+  });
+
+  /**
+   * The utilities read `--on-*`, NOT `--*-foreground`. globals.css maps them through
+   * `@theme inline`:
+   *   --color-secondary-foreground: hsl(var(--on-secondary));
+   * so writing `--secondary-foreground` produced a token nothing reads — the background flipped
+   * to the tenant colour and the ink did not. These tests previously asserted that dead token,
+   * which is how the bug survived: the test agreed with the code and both were wrong.
+   */
+  it("writes the tokens the Tailwind utilities actually resolve to", () => {
+    const css = brandVarsCss({ primaryColour: "#facc15", secondaryColour: "#facc15" });
+    expect(css).toContain("--on-primary:");
+    expect(css).toContain("--on-secondary:");
+    // The dead tokens must not come back.
+    expect(css).not.toContain("--primary-foreground:");
+    expect(css).not.toContain("--secondary-foreground:");
+  });
+
+  // Primary had no contrast pick at all, so a pale brand colour rendered the DS default
+  // near-white ink on top of it — unreadable.
+  it("picks dark ink on a pale primary, and white on a dark one", () => {
+    expect(brandVarsCss({ primaryColour: "#facc15" })).toContain("--on-primary: 222 47% 11%;");
+    expect(brandVarsCss({ primaryColour: "#123456" })).toContain("--on-primary: 0 0% 100%;");
   });
 
   it("exposes a non-hex primary as a var but does not override --primary channels", () => {

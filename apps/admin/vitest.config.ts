@@ -9,7 +9,13 @@ export default defineConfig({
   },
   test: {
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
-    environment: "node",
+    // jsdom, not node: `src/lib` — the gated scope — contains React hooks (use-api, turf-basket,
+    // geo-explorer-state, use-realtime-inbox, …). Under a node environment they were inside the
+    // coverage gate while being impossible to execute, so they sat at 0% and held the package at
+    // 48%. src/app and src/components remain e2e territory for JOURNEYS; this makes behaviour
+    // reachable. See src/test/setup.ts for what is mocked and why.
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
     // Feeds the repo-wide coverage gate (scripts/coverage-check.mjs). `all: true` forces every
     // source file into the report even with no test, so new untested files read as all-missed
     // (0-hit) rather than absent – which is what keeps patch coverage honest.

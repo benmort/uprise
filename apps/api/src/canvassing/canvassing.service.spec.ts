@@ -1042,6 +1042,57 @@ describe("CanvassingService", () => {
       await expect(service.updateVolunteer("org1", "missing", { displayName: "x" })).rejects.toThrow();
     });
 
+    // Privilege escalation. listVolunteers returns EVERY member including the OWNER, and this
+    // endpoint is only @Roles(ORGANISER) — it writes TenantMember.role and User.passwordHash
+    // directly, bypassing tenants.service's assertCanGrant/assertNotLastOwner. So an organiser
+    // saving the owner's row demoted them (the dialog's role select pre-filled "Volunteer" for
+    // any non-organiser) and could set their password.
+    describe("owner rows are not editable from the canvassing roster", () => {
+      const ownerMembership = { tenantId: "org1", userId: "owner1", role: AppUserRole.OWNER };
+
+      it("refuses an organiser editing the owner — even a harmless field", async () => {
+        prisma.tenantMember.findFirst.mockResolvedValue(ownerMembership);
+        await expect(
+          service.updateVolunteer("org1", "owner1", { mobile: "+61400000000" }, { userId: "org-user" }),
+        ).rejects.toMatchObject({ response: { error: { code: "OWNER_NOT_EDITABLE_HERE" } } });
+        expect(prisma.user.update).not.toHaveBeenCalled();
+        expect(prisma.tenantMember.update).not.toHaveBeenCalled();
+      });
+
+      it("refuses a password reset on the owner", async () => {
+        prisma.tenantMember.findFirst.mockResolvedValue(ownerMembership);
+        await expect(
+          service.updateVolunteer("org1", "owner1", { password: "takeover123" }, { userId: "org-user" }),
+        ).rejects.toThrow();
+        expect(prisma.user.update).not.toHaveBeenCalled();
+      });
+
+      it("refuses a demote to VOLUNTEER", async () => {
+        prisma.tenantMember.findFirst.mockResolvedValue(ownerMembership);
+        await expect(
+          service.updateVolunteer("org1", "owner1", { role: AppUserRole.VOLUNTEER }, { userId: "org-user" }),
+        ).rejects.toThrow();
+        expect(prisma.tenantMember.update).not.toHaveBeenCalled();
+      });
+
+      it("still allows a super-admin, and the owner on their own row", async () => {
+        prisma.tenantMember.findFirst.mockResolvedValue(ownerMembership);
+        await expect(
+          service.updateVolunteer("org1", "owner1", { displayName: "Ada" }, { userId: "someone", isSuperAdmin: true }),
+        ).resolves.toBeDefined();
+        await expect(
+          service.updateVolunteer("org1", "owner1", { displayName: "Ada" }, { userId: "owner1" }),
+        ).resolves.toBeDefined();
+      });
+
+      it("leaves ordinary rows untouched by the guard", async () => {
+        prisma.tenantMember.findFirst.mockResolvedValue({ tenantId: "org1", userId: "u1", role: AppUserRole.VOLUNTEER });
+        await expect(
+          service.updateVolunteer("org1", "u1", { displayName: "Bob" }, { userId: "org-user" }),
+        ).resolves.toBeDefined();
+      });
+    });
+
     it("updates only the role (no user fields) and returns the new role", async () => {
       prisma.tenantMember.findFirst.mockResolvedValue({ tenantId: "org1", userId: "u1", role: "VOLUNTEER" });
       const res = await service.updateVolunteer("org1", "u1", { role: AppUserRole.ORGANISER });

@@ -88,9 +88,18 @@ describe("CanvassingController", () => {
     expect(svc.createVolunteer).toHaveBeenCalledWith("t1", { email: "v@x.co", role: undefined });
   });
 
-  it("updateVolunteer delegates with tenantId + id + coerced role", async () => {
-    await c.updateVolunteer("v1", { name: "V" } as any, "t1");
-    expect(svc.updateVolunteer).toHaveBeenCalledWith("t1", "v1", { name: "V", role: undefined });
+  // The actor rides along so the service can refuse an OWNER row from this roster — the
+  // canvassing endpoint writes role + passwordHash directly and is only @Roles(ORGANISER).
+  it("updateVolunteer delegates with tenantId + id + coerced role + the actor", async () => {
+    await c.updateVolunteer("v1", { name: "V" } as any, "t1", {
+      user: { id: "u-actor", isSuperAdmin: false },
+    } as any);
+    expect(svc.updateVolunteer).toHaveBeenCalledWith(
+      "t1",
+      "v1",
+      { name: "V", role: undefined },
+      { userId: "u-actor", isSuperAdmin: false },
+    );
   });
 
   it("listTurfContacts delegates with tenantId + turfId", async () => {

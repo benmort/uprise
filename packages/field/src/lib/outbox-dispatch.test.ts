@@ -25,11 +25,40 @@ function deps(over: Partial<DispatchDeps> = {}): DispatchDeps {
 }
 
 describe("classify", () => {
-  it("marks network/timeout/5xx/auth transient, domain errors terminal", () => {
-    expect(classify("Failed to fetch")).toMatchObject({ retriable: true });
-    expect(classify("503 upstream")).toMatchObject({ retriable: true });
-    expect(classify("Not authenticated")).toMatchObject({ retriable: true });
-    expect(classify("TURF_NOT_ASSIGNED")).toMatchObject({ retriable: false });
+  it("retries a transport failure or a timeout, whatever the wording", () => {
+    expect(classify({ error: "Failed to fetch", networkError: true })).toMatchObject({ retriable: true });
+    // WebKit's wording. The old regex only knew Chrome's, so iOS canvassers lost their work.
+    expect(classify({ error: "Load failed", networkError: true })).toMatchObject({ retriable: true });
+    expect(classify({ error: "The request timed out after 30 seconds.", timedOut: true })).toMatchObject({
+      retriable: true,
+    });
+    expect(classify({ error: "The request timed out after 120 seconds.", timedOut: true })).toMatchObject({
+      retriable: true,
+    });
+  });
+
+  it("decides from the HTTP status, not the prose", () => {
+    // A 500 whose body says "Internal server error" — no digits the old regex could find.
+    expect(classify({ error: "Internal server error", status: 500 })).toMatchObject({ retriable: true });
+    expect(classify({ error: "Upload failed (401)", status: 401 })).toMatchObject({ retriable: true });
+    expect(classify({ error: "Too many requests", status: 429 })).toMatchObject({ retriable: true });
+    expect(classify({ error: "Request timeout", status: 408 })).toMatchObject({ retriable: true });
+  });
+
+  it("treats a domain refusal as terminal", () => {
+    expect(classify({ error: "TURF_NOT_ASSIGNED", status: 409 })).toMatchObject({ retriable: false });
+    expect(classify({ error: "CONTACT_NOT_FOUND", status: 404 })).toMatchObject({ retriable: false });
+    expect(classify({ error: "Storage is not configured", status: 400 })).toMatchObject({ retriable: false });
+    expect(classify({ error: "Forbidden", status: 403 })).toMatchObject({ retriable: false });
+  });
+
+  // Losing a door knock is worse than sending it twice — the API dedups on localId.
+  it("keeps the work when there is no structure to judge by", () => {
+    expect(classify({ error: "something odd" })).toMatchObject({ retriable: true });
+  });
+
+  it("passes the message through unchanged", () => {
+    expect(classify({ error: "Load failed", networkError: true }).error).toBe("Load failed");
   });
 });
 

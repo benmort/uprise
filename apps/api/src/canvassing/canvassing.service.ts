@@ -779,14 +779,45 @@ export class CanvassingService {
     }
   }
 
-  /** Edit a volunteer/organiser: rename, change role, or reset the password. */
+  /**
+   * Edit a volunteer/organiser: rename, change role, or reset the password.
+   *
+   * This is the CANVASSING roster, gated at `@Roles(ORGANISER)`, and it deliberately refuses to
+   * touch an OWNER. It has to, because it writes `TenantMember.role` and `User.passwordHash`
+   * directly rather than through `TenantsService`, where the real invariants live
+   * (`assertCanGrant`, `assertNotLastOwner`).
+   *
+   * Without this guard the roster was a privilege-escalation path, and the innocuous half was the
+   * dangerous one: `listVolunteers` returns every member including the OWNER, the edit dialog
+   * collapsed any non-organiser role to "Volunteer" in its pre-filled select, and submit posted
+   * that role unconditionally. So an organiser correcting the owner's phone number demoted the
+   * owner to VOLUNTEER — which bounces them to the field PWA and strips the organisation and
+   * channel setup flows — with no warning and no way back from this screen (the DTO only accepts
+   * ORGANISER|VOLUNTEER). The same dialog's password field would then let that organiser sign in
+   * as them.
+   *
+   * Owners are managed on the members surface, which has the seniority and last-owner guards.
+   * A super-admin, and the owner acting on their own row, are still allowed through.
+   */
   async updateVolunteer(
     tenantId: string,
     id: string,
     input: { displayName?: string; role?: AppUserRole; password?: string; mobile?: string },
+    actor?: { userId?: string; isSuperAdmin?: boolean },
   ) {
     const membership = await this.prisma.tenantMember.findFirst({ where: { userId: id, tenantId } });
     if (!membership) throw new ApiHttpException("USER_NOT_FOUND", "User not found");
+    if (
+      membership.role === AppUserRole.OWNER &&
+      !actor?.isSuperAdmin &&
+      actor?.userId !== id
+    ) {
+      throw new ApiHttpException(
+        "OWNER_NOT_EDITABLE_HERE",
+        "This person is the workspace owner. Manage owners from Settings → Members.",
+        403,
+      );
+    }
     const userData: Prisma.UserUpdateInput = {};
     if (input.displayName !== undefined) userData.displayName = input.displayName;
     if (input.password) userData.passwordHash = await hashPassword(input.password);

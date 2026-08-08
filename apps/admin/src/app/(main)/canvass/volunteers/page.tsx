@@ -15,11 +15,14 @@ import { FormDialog } from "@/components/ui/form-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable } from "@uprise/field";
 import { RoleChip } from "@uprise/field";
+import { displayRole, initialAssignableRole, roleChangeFor } from "@/lib/canvass/volunteer-roles";
 import { InviteVolunteerCard } from "@/components/canvass/invite-volunteer-card";
 import { ShareSignupLinkCard } from "@/components/canvass/share-signup-link-card";
 import { useToast } from "@/components/ui/toast";
 
+// Optional on purpose: an OWNER row has no assignable role for this surface to offer.
 type Role = "VOLUNTEER" | "ORGANISER";
+type EditableRole = Role | undefined;
 type Volunteer = { id: string; displayName: string; email: string | null; role: string; mobile: string | null };
 
 export default function VolunteersPage() {
@@ -33,7 +36,7 @@ export default function VolunteersPage() {
   const rows: Volunteer[] = data ?? [];
 
   const [editing, setEditing] = useState<Volunteer | null>(null);
-  const [editForm, setEditForm] = useState<{ displayName: string; role: Role; password: string; mobile: string }>({
+  const [editForm, setEditForm] = useState<{ displayName: string; role: EditableRole; password: string; mobile: string }>({
     displayName: "",
     role: "VOLUNTEER",
     password: "",
@@ -45,7 +48,7 @@ export default function VolunteersPage() {
     setEditing(c);
     setEditForm({
       displayName: c.displayName,
-      role: c.role === "ORGANISER" ? "ORGANISER" : "VOLUNTEER",
+      role: initialAssignableRole(c.role),
       password: "",
       mobile: c.mobile ?? "",
     });
@@ -60,7 +63,8 @@ export default function VolunteersPage() {
     setEditBusy(true);
     const res = await updateVolunteer(editing.id, {
       displayName: editForm.displayName.trim(),
-      role: editForm.role,
+      // Only when it actually changed — an untouched select used to demote the owner.
+      role: roleChangeFor(editing.role, editForm.role),
       password: editForm.password || undefined,
       mobile: editForm.mobile.trim(),
     });
@@ -111,7 +115,7 @@ export default function VolunteersPage() {
             {
               key: "role",
               header: "Role",
-              cell: (r) => <RoleChip role={r.role === "ORGANISER" ? "ORGANISER" : "VOLUNTEER"} />,
+              cell: (r) => <RoleChip role={displayRole(r.role)} />,
             },
             {
               key: "actions",

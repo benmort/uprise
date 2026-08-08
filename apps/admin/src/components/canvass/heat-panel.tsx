@@ -167,7 +167,12 @@ export function HeatPanel({
       tone: "success",
       title: res.data.meta.queued ? "Saved – recompute queued" : "Targeting rescored",
     });
-  }, [campaignId, mode, weights, fitIndicator, communityIndicator, onData, showToast]);
+    // `electionId` belongs here. Without it `save` keeps the closure from the render before the
+    // organiser's pick — nothing else in the list changes when `setElectionId` runs (campaignId is
+    // a prop, the other state is untouched, `onData` only changes when the PARENT re-renders), so
+    // useCallback returned the stale memo and the pick was silently dropped: the config saved
+    // against the default election while the select showed the chosen one.
+  }, [campaignId, mode, weights, fitIndicator, communityIndicator, electionId, onData, showToast]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
