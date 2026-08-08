@@ -39,6 +39,7 @@ import { tenants, type AuthPrincipal } from "@uprise/api-client";
 import { tenantSlugFromPlatformHost } from "@uprise/domains";
 import { createBlastAndOpen } from "@/lib/blasts";
 import { getSession, getSessionOutcome, goToLogin, logout } from "@/lib/session";
+import { canManageWorkspace } from "@/lib/principal-roles";
 import { reportClientError } from "@/lib/report-error";
 import { setupComplete, overallProgress } from "@/lib/setup/setup-state";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
@@ -601,9 +602,13 @@ export default function MainLayout({
     };
   }, [ready]);
 
-  // Pending join-request count for the Settings/Team nav badge (organisers only).
+  // Pending join-request count for the Settings/Team nav badge.
+  //
+  // Owners AND organisers — `principal.role` is the membership role verbatim, so an owner is
+  // "OWNER" and a `!== "ORGANISER"` gate hid this from the very person who owns the workspace.
+  // The API is gated on the `member.manage` ability, which owners hold.
   useEffect(() => {
-    if (!ready || !principal?.tenantId || principal.role !== "ORGANISER") return;
+    if (!ready || !principal?.tenantId || !canManageWorkspace(principal)) return;
     let cancelled = false;
     const tenantId = principal.tenantId;
     const sync = async () => {

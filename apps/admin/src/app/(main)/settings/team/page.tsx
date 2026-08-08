@@ -236,9 +236,10 @@ export default function TeamPage() {
   const loadAll = useCallback(async () => {
     const session = await getSession();
     const tid = session?.tenantId ?? null;
-    // AuthPrincipal.role only expresses ORGANISER/VOLUNTEER (an OWNER signs in as
-    // ORGANISER for app purposes); managing the team is organiser-level – matching
-    // the API's manage tenant.member / tenant.invitation guards.
+    // AuthPrincipal.role carries the member's real AppRole – OWNER, ORGANISER or
+    // VOLUNTEER (see AuthPrincipal in @uprise/contracts); managing the team is
+    // owner/organiser-level, matching the API's manage tenant.member /
+    // tenant.invitation guards.
     const manage = (session?.role === "ORGANISER" || session?.role === "OWNER") && Boolean(tid);
     setTenantId(tid);
     setCurrentUserId(session?.id ?? null);
